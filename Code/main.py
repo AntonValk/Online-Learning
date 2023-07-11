@@ -1,6 +1,5 @@
-# Code for German Data
-
 # All libraries
+import os
 import random
 import numpy as np
 import torch
@@ -13,6 +12,7 @@ from AuxDrop import AuxDrop_ODL, AuxDrop_OGD, AuxDrop_ODL_AuxLayer1stlayer
 from AuxDrop import AuxDrop_ODL_DirectedInAuxLayer_RandomOtherLayer, AuxDrop_ODL_RandomAllLayer 
 from AuxDrop import AuxDrop_ODL_RandomInAuxLayer, AuxDrop_ODL_RandomInFirstLayer_AllFeatToFirst
 from dataset import dataset
+from joblib import Parallel, delayed
 
 # Data description
 # "german", "svmguide3", "magic04", "a8a", "ItalyPowerDemand", "SUSY", "HIGGS"
@@ -44,13 +44,14 @@ batch_size = 1
 b = 0.99
 s = 0.2
 use_cuda = False
-number_of_experiments = 1
+number_of_experiments = 5
 
 print("The model is run in ", model_to_run, " with aux layer as ", aux_layer, " and type of dataset as ", type)
 
 error_list = []
 loss_list = []
-for ex in range(number_of_experiments):
+# for ex in range(number_of_experiments):
+def run_trial(ex):
         print("Experiment number ", ex+1)
         seed = random.randint(0, 10000)
 
@@ -112,7 +113,7 @@ for ex in range(number_of_experiments):
                 else:
                         print("Choose dataset in ", ["german", "svmguide3", "magic04", "a8a"])
                         exit()
-        
+
         if model_to_run == "AuxDrop_ODL_RandomInAuxLayer":
                 if data_name in ["german", "svmguide3", "magic04", "a8a"]:
                         model = AuxDrop_ODL_RandomInAuxLayer(features_size = n_base_feat, max_num_hidden_layers = max_num_hidden_layers, 
@@ -151,6 +152,10 @@ for ex in range(number_of_experiments):
                 # print("The error in the ", data_name, " dataset is ", error)
                 # print(np.sum(aux_mask))
                 error_list.append(error)
+
+Parallel(n_jobs=min(number_of_experiments, os.cpu_count()), require='sharedmem')(
+        delayed(run_trial)(i) for i in range(number_of_experiments)
+)
 
 
 if data_name == "ItalyPowerDemand":
