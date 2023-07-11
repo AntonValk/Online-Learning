@@ -1,22 +1,41 @@
 
-# Aux-Drop: Handling Haphazard Inputs in Online Learning Using Auxiliary Dropouts
-This paper is accepted at Transactions on Machine Learning Research. The link to the paper is: https://openreview.net/pdf?id=R9CgBkeZ6Z. 
-
-Please cite this paper, in case you are using the code or the paper:  
-**@article{\
-agarwal2023auxdrop,\
-title={Aux-Drop: Handling Haphazard Inputs in Online Learning Using Auxiliary Dropouts},\
-author={Rohit Agarwal and Deepak Gupta and Alexander Horsch and Dilip K. Prasad},\
-journal={Transactions on Machine Learning Research},\
-issn={2835-8856},\
-year={2023},\
-url={ https://openreview.net/forum?id=R9CgBkeZ6Z }, \
-note={Reproducibility Certification}\
-}**
-
+# Online Learning Project
 
 ## Overview
-This repository contains datasets and implementation code for the paper, titled "Aux-Drop: Handling Haphazard Inputs in Online Learning Using Auxiliary Dropouts".
+This repository is forked from "Aux-Drop: Handling Haphazard Inputs in Online Learning Using Auxiliary Dropouts".
+
+## Docker Setup
+
+# Using this repository
+
+## Create workspace and clone this repository
+
+```mkdir workspace```
+
+```cd workspace```
+
+```git clone https://github.com/AntonValk/Online-Learning```
+
+## Build docker image and launch container
+
+Build image and start the lightweight docker container. Note that this assumes that the data for the project will be stored in the shared folder /home/pose-estimation accessible to you and other project members. 
+```
+docker build -f Dockerfile -t aux_drop:$USER .
+docker run -p 18888:8888 -p 16000-16010:6000-6010 -v ~/workspace/Aux-Drop/Code:/workspace/Online-Learning -t -d --shm-size="16g" --name aux_drop_$USER aux_drop:$USER
+```
+
+## Enter docker container and launch training session
+
+```
+docker exec -i -t aux_drop_$USER  /bin/bash 
+```
+
+## Download and extract datasets
+
+```
+chmod +777 download.sh
+./download.sh
+```
 
 ## Datasets
 We use 7 different datasets for this project. The link of all the datasets can be found below. Moreover, the datasets are also given in their respective folders inside `Code/Datasets` directory. HIGGS and SUSY are big data, hence they are not provided inside the directory. But to run them, please download HIGGS data and mask from the link given below and save them in the `Code/Datasets/HIGGS/data/` folder and `Code/Datasets/HIGGS/mask/` folder respectively. Same goes for the SUSY dataset.
