@@ -1,6 +1,7 @@
 # All libraries
 import os
 import random
+import collections
 import numpy as np
 import torch
 import torch.nn as nn
@@ -52,6 +53,7 @@ error_list = []
 loss_list = []
 # for ex in range(number_of_experiments):
 def run_trial(ex):
+        trial_stats = 0
         print("Experiment number ", ex+1)
         seed = random.randint(0, 10000)
 
@@ -143,7 +145,8 @@ def run_trial(ex):
         if data_name == "ItalyPowerDemand":
                 loss = np.mean(model.loss_array)
                 # print("The loss in the ", data_name, " dataset is ", loss)
-                loss_list.append(loss)
+                # loss_list.append(loss)
+                trial_stats = loss
         else:
                 prediction = []
                 for i in model.prediction:
@@ -151,17 +154,19 @@ def run_trial(ex):
                 error = len(prediction) - sum(prediction == label)
                 # print("The error in the ", data_name, " dataset is ", error)
                 # print(np.sum(aux_mask))
-                error_list.append(error)
+                # error_list.append(error)
+                trial_stats = error
+        return trial_stats
 
-Parallel(n_jobs=min(number_of_experiments, os.cpu_count()), require='sharedmem')(
+result = Parallel(n_jobs=min(number_of_experiments, os.cpu_count()))(
         delayed(run_trial)(i) for i in range(number_of_experiments)
 )
 
 
 if data_name == "ItalyPowerDemand":
-        print("The mean loss in the ", data_name, " dataset for ", number_of_experiments, " number of experiments is ", np.mean(loss_list),
-              " and the standard deviation is ", np.std(loss_list))
+        print("The mean loss in the ", data_name, " dataset for ", number_of_experiments, " number of experiments is ", np.mean(result),
+              " and the standard deviation is ", np.std(result))
 else:
-        print("The mean error in the ", data_name, " dataset for ", number_of_experiments, " number of experiments is ", np.mean(error_list), 
-                " and the standard deviation is ", np.std(error_list))
+        print("The mean error in the ", data_name, " dataset for ", number_of_experiments, " number of experiments is ", np.mean(result), 
+                " and the standard deviation is ", np.std(result))
         
