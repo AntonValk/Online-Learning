@@ -49,20 +49,18 @@ class SingleStageResidualNet(t.nn.Module):
         self.model = t.nn.ModuleList(
             self.encoder_blocks + self.stage_blocks + self.embeddings)
 
-    def encode(self, x: t.Tensor, weights: t.Tensor, *args) -> t.Tensor:
+    def encode(self, x: t.Tensor, *args) -> t.Tensor:
         """
                 x the continuous input : BxNxF
                 weights the weight of each input BxN
                 e the categorical inputs BxNxC
                 """
 
-        weights = weights.unsqueeze(2)
-        weights_sum = weights.sum(dim=1, keepdim=True)
-
-        ee = [x]
-        for i, v in enumerate(args):
-            ee.append(self.embeddings[i](v))
-        backcast = t.cat(ee, dim=-1)
+        # ee = [x]
+        # for i, v in enumerate(args):
+        #     ee.append(self.embeddings[i](v))
+        # backcast = t.cat(ee, dim=-1)
+        backcast = x
 
         encoding = 0.0
         for i, block in enumerate(self.encoder_blocks):
@@ -70,12 +68,12 @@ class SingleStageResidualNet(t.nn.Module):
             encoding = encoding + e
 
             # weighted average
-            prototype = (encoding * weights).sum(dim=1, keepdim=True) / weights_sum
+            prototype = (encoding).sum(dim=1, keepdim=True)
 
             backcast = backcast - prototype / (i + 1.0)
             backcast = t.relu(backcast)
 
-        pose_embedding = (encoding * weights).sum(dim=1, keepdim=True) / weights_sum
+        pose_embedding = (encoding).sum(dim=1, keepdim=True)
         pose_embedding = pose_embedding.squeeze(1)
         return pose_embedding
 
@@ -88,15 +86,18 @@ class SingleStageResidualNet(t.nn.Module):
 
         return stage_forecast
 
-    def forward(self, x: t.Tensor, weights: t.Tensor, *args) -> Tuple[t.Tensor, t.Tensor]:
+    def forward(self, x: t.Tensor, *args) -> Tuple[t.Tensor, t.Tensor]:
         """
         x the continuous input : BxNxF
-        weights the weight of each input BxN
         e the categorical inputs BxNxC
         """
 
-        pose_embedding = self.encode(x, weights, *args)
-        return self.decode(pose_embedding)
+        X = t.from_numpy(X).float()
+        aux_feat = t.from_numpy(aux_feat).float()
+        aux_mask = t.from_numpy(aux_mask).float()
+        x = t.cat([X, aux_feat*aux_mask])
+        pose_embedding = self.encode(x, *args)
+        return t.softmax(self.decode(pose_embedding))
 
 
 
