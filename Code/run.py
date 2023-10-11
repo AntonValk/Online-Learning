@@ -24,7 +24,7 @@ from modules.residual import SingleStageResidualNet
 
 # Data description
 # "german", "svmguide3", "magic04", "a8a", "ItalyPowerDemand", "SUSY", "HIGGS"
-data_name = "german"
+data_name = "magic04"
 
 # Choose the type of data unavailability
 # type can be - "variable_p", "trapezoidal", "obsolete_sudden"
@@ -37,12 +37,14 @@ type = "variable_p"
 # "AuxDrop_ODL_RandomAllLayer" - On ODL framework, Random Dropout applied in all the layers
 #  "AuxDrop_ODL_RandomInAuxLayer" - On ODL framework, Random Dropout applied in the AuxLayer
 # "AuxDrop_ODL_RandomInFirstLayer_AllFeatToFirst" - On ODL framework, Random Dropout applied in the first layer and all the features (base + auxiliary) are passed to the first layer
-model_to_run = "AuxDrop_OGD"
-# model_to_run = "ResidualSingleStage"
+
+# model_to_run = "AuxDrop_ODL"
+# model_to_run = "AuxDrop_OGD"
+model_to_run = "ResidualSingleStage"
 
 # Values to change
-n = 0.1
-aux_feat_prob = 0.2
+n = 0.01
+aux_feat_prob = 0.68
 dropout_p = 0.3
 max_num_hidden_layers = 6
 qtd_neuron_per_hidden_layer = 50
@@ -53,7 +55,7 @@ batch_size = 1
 b = 0.99
 s = 0.2
 use_cuda = False
-number_of_experiments = 5
+number_of_experiments = 20
 
 error_list = []
 loss_list = []
@@ -71,7 +73,41 @@ def run_trial(ex):
     # X_aux contains the auxiliary features with all the data (even the unavailable ones)
 
     model = None
-    if model_to_run == "AuxDrop_OGD":
+    if model_to_run == "AuxDrop_ODL":
+        if aux_layer == 1:
+            model = AuxDrop_ODL_AuxLayer1stlayer(
+                features_size=n_base_feat,
+                max_num_hidden_layers=max_num_hidden_layers,
+                qtd_neuron_per_hidden_layer=qtd_neuron_per_hidden_layer,
+                n_classes=n_classes,
+                aux_layer=aux_layer,
+                n_neuron_aux_layer=n_neuron_aux_layer,
+                batch_size=batch_size,
+                b=b,
+                n=n,
+                s=s,
+                dropout_p=dropout_p,
+                n_aux_feat=n_aux_feat,
+                use_cuda=use_cuda,
+            )
+        else:
+            # Creating the Aux-Drop(ODL) Model
+            model = AuxDrop_ODL(
+                features_size=n_base_feat,
+                max_num_hidden_layers=max_num_hidden_layers,
+                qtd_neuron_per_hidden_layer=qtd_neuron_per_hidden_layer,
+                n_classes=n_classes,
+                aux_layer=aux_layer,
+                n_neuron_aux_layer=n_neuron_aux_layer,
+                batch_size=batch_size,
+                b=b,
+                n=n,
+                s=s,
+                dropout_p=dropout_p,
+                n_aux_feat=n_aux_feat,
+                use_cuda=use_cuda,
+            )
+    elif model_to_run == "AuxDrop_OGD":
         if data_name in ["ItalyPowerDemand", "SUSY", "HIGGS"]:
             print(
                 "You need to make some changes in the code to support AuxDrop_OGD with ",
