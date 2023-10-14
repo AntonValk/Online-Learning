@@ -22,9 +22,11 @@ from dataset import dataset
 from joblib import Parallel, delayed
 from modules.residual import SingleStageResidualNet
 
+from torch.utils.tensorboard import SummaryWriter
+
 # Data description
 # "german", "svmguide3", "magic04", "a8a", "ItalyPowerDemand", "SUSY", "HIGGS"
-data_name = "magic04"
+data_name = "german"
 
 # Choose the type of data unavailability
 # type can be - "variable_p", "trapezoidal", "obsolete_sudden"
@@ -38,29 +40,31 @@ type = "variable_p"
 #  "AuxDrop_ODL_RandomInAuxLayer" - On ODL framework, Random Dropout applied in the AuxLayer
 # "AuxDrop_ODL_RandomInFirstLayer_AllFeatToFirst" - On ODL framework, Random Dropout applied in the first layer and all the features (base + auxiliary) are passed to the first layer
 
-# model_to_run = "AuxDrop_ODL"
+model_to_run = "AuxDrop_ODL"
 # model_to_run = "AuxDrop_OGD"
-model_to_run = "ResidualSingleStage"
+# model_to_run = "ResidualSingleStage"
 
 # Values to change
 n = 0.01
-aux_feat_prob = 0.68
+aux_feat_prob = 0.75
 dropout_p = 0.3
 max_num_hidden_layers = 6
 qtd_neuron_per_hidden_layer = 50
 n_classes = 2
 aux_layer = 3
-n_neuron_aux_layer = 100
+n_neuron_aux_layer = 400
 batch_size = 1
 b = 0.99
 s = 0.2
 use_cuda = False
-number_of_experiments = 20
+number_of_experiments = 4
 
 error_list = []
 loss_list = []
 # for ex in range(number_of_experiments):
 def run_trial(ex):
+    # default `log_dir` is "runs" - we'll be more specific here
+    writer = SummaryWriter(log_dir=f"runs/{data_name}/{model_to_run}", comment="_LR_"+str(n))
     trial_stats = 0
     print("Experiment number ", ex + 1)
     seed = ex
@@ -149,21 +153,29 @@ def run_trial(ex):
                 lr=n,
             )
         
-        # num_blocks_enc: int, num_layers_enc: int, layer_width_enc,
-        #          num_blocks_stage: int, num_layers_stage: int, layer_width_stage: int,
-        #          dropout: float, size_in: int, size_out: int,
-        #          embedding_dim: int, embedding_size: int, embedding_num: int, layer_norm: bool = True, eps: float = 1e-6)
-
 
     # Run the model
     N = X_base.shape[0]
+    cumulative_error_train = np.array([0])
+    cumulative_error_test = np.array([0])
+    exp_smoothing = 0.15
+    prev_train = prev_test = 0
     for i in tqdm(range(N)):
-        model.partial_fit(
-            X_base[i].reshape(1, n_base_feat),
-            X_aux_new[i].reshape(1, n_aux_feat),
-            aux_mask[i].reshape(1, n_aux_feat),
-            Y[i].reshape(1),
-        )
+        pred = model.forward(X_base[i].reshape(1, n_base_feat), X_aux[i].reshape(1, n_aux_feat), aux_mask[i].reshape(1, n_aux_feat))
+        cumulative_error_test += torch.argmax(pred).item() != Y[i]
+        writer.add_scalar('test/cumulative_error_{}'.format(ex), cumulative_error_test, i)
+        writer.add_scalar('test/exp_smooth_error_{}'.format(ex), exp_smoothing * (torch.argmax(pred).item() != Y[i]) + (1 - exp_smoothing) * prev_test, i)
+        prev_test = exp_smoothing * (torch.argmax(pred).item() != Y[i]) + (1 - exp_smoothing) * prev_test
+        writer.add_scalar('test/norm_error_{}'.format(ex), cumulative_error_test/i, i)
+        test_loss = model.loss_fn(pred, torch.tensor(Y[i], dtype=torch.long))
+        writer.add_scalar('test/test loss_{}'.format(ex), test_loss, i)
+        model.partial_fit(X_base[i].reshape(1, n_base_feat), X_aux_new[i].reshape(1, n_aux_feat), aux_mask[i].reshape(1, n_aux_feat), Y[i].reshape(1))
+        cumulative_error_train += torch.argmax(model.prediction[i]).item() != Y[i]
+        writer.add_scalar('train/cumulative_error_{}'.format(ex), cumulative_error_train, i)
+        writer.add_scalar('train/exp_smooth_error_{}'.format(ex), exp_smoothing * (torch.argmax(model.prediction[i]).item() != Y[i]) + (1 - exp_smoothing) * prev_train, i)
+        prev_train = exp_smoothing * (torch.argmax(model.prediction[i]).item() != Y[i]) + (1 - exp_smoothing) * prev_train
+        writer.add_scalar('train/norm_error_{}'.format(ex), cumulative_error_train/i, i)
+        writer.add_scalar('train/training_loss_{}'.format(ex), model.loss_array[-1], i)
 
     # Calculate error or loss
     if data_name == "ItalyPowerDemand":
@@ -180,6 +192,7 @@ def run_trial(ex):
         # print(np.sum(aux_mask))
         # error_list.append(error)
         trial_stats = error
+        # logging
     return trial_stats
 
 
@@ -187,6 +200,7 @@ result = Parallel(n_jobs=min(number_of_experiments, os.cpu_count()))(
     delayed(run_trial)(i) for i in range(number_of_experiments)
 )
 
+# result = run_trial(1)
 
 if data_name == "ItalyPowerDemand":
     print(
