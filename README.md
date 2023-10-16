@@ -21,7 +21,7 @@ This repository is forked from "Aux-Drop: Handling Haphazard Inputs in Online Le
 Build image and start the lightweight docker container. Note that this assumes that the data for the project will be stored in the shared folder /home/pose-estimation accessible to you and other project members. 
 ```
 docker build -f Dockerfile -t aux_drop:$USER .
-docker run -p 18888:8888 -p 16000-16010:6000-6010 -v ~/workspace/Online-Learning/Code:/workspace/Online-Learning -t -d --shm-size="16g" --name aux_drop_$USER aux_drop:$USER
+docker run -p 8888:8888 -p 6006:6006 -v ~/workspace/Online-Learning/Code:/workspace/Online-Learning -t -d --shm-size="32g" --name aux_drop_$USER aux_drop:$USER
 ```
 
 ## Enter docker container and launch training session
