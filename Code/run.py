@@ -40,9 +40,9 @@ type = "variable_p"
 #  "AuxDrop_ODL_RandomInAuxLayer" - On ODL framework, Random Dropout applied in the AuxLayer
 # "AuxDrop_ODL_RandomInFirstLayer_AllFeatToFirst" - On ODL framework, Random Dropout applied in the first layer and all the features (base + auxiliary) are passed to the first layer
 
-model_to_run = "AuxDrop_ODL"
+# model_to_run = "AuxDrop_ODL"
 # model_to_run = "AuxDrop_OGD"
-# model_to_run = "ResidualSingleStage"
+model_to_run = "ResidualSingleStage"
 
 # Values to change
 n = 0.01
@@ -57,14 +57,14 @@ batch_size = 1
 b = 0.99
 s = 0.2
 use_cuda = False
-number_of_experiments = 4
+number_of_experiments = 20
 
 error_list = []
 loss_list = []
 # for ex in range(number_of_experiments):
 def run_trial(ex):
     # default `log_dir` is "runs" - we'll be more specific here
-    writer = SummaryWriter(log_dir=f"runs/{data_name}/{model_to_run}", comment="_LR_"+str(n))
+    writer = SummaryWriter(log_dir=f"runs/{data_name}/{model_to_run}/{ex}", comment="_LR_"+str(n))
     trial_stats = 0
     print("Experiment number ", ex + 1)
     seed = ex
@@ -158,24 +158,26 @@ def run_trial(ex):
     N = X_base.shape[0]
     cumulative_error_train = np.array([0])
     cumulative_error_test = np.array([0])
-    exp_smoothing = 0.15
+    exp_smoothing = 0.05
     prev_train = prev_test = 0
     for i in tqdm(range(N)):
         pred = model.forward(X_base[i].reshape(1, n_base_feat), X_aux[i].reshape(1, n_aux_feat), aux_mask[i].reshape(1, n_aux_feat))
         cumulative_error_test += torch.argmax(pred).item() != Y[i]
-        writer.add_scalar('test/cumulative_error_{}'.format(ex), cumulative_error_test, i)
-        writer.add_scalar('test/exp_smooth_error_{}'.format(ex), exp_smoothing * (torch.argmax(pred).item() != Y[i]) + (1 - exp_smoothing) * prev_test, i)
+        writer.add_scalar('test/cumulative_error', cumulative_error_test, i)
+        writer.add_scalar('test/exp_smooth_error', exp_smoothing * (torch.argmax(pred).item() != Y[i]) + (1 - exp_smoothing) * prev_test, i)
         prev_test = exp_smoothing * (torch.argmax(pred).item() != Y[i]) + (1 - exp_smoothing) * prev_test
-        writer.add_scalar('test/norm_error_{}'.format(ex), cumulative_error_test/i, i)
+        writer.add_scalar('test/norm_error', cumulative_error_test/i, i)
         test_loss = model.loss_fn(pred, torch.tensor(Y[i], dtype=torch.long))
-        writer.add_scalar('test/test loss_{}'.format(ex), test_loss, i)
+        writer.add_scalar('test/test loss', test_loss, i)
         model.partial_fit(X_base[i].reshape(1, n_base_feat), X_aux_new[i].reshape(1, n_aux_feat), aux_mask[i].reshape(1, n_aux_feat), Y[i].reshape(1))
-        cumulative_error_train += torch.argmax(model.prediction[i]).item() != Y[i]
-        writer.add_scalar('train/cumulative_error_{}'.format(ex), cumulative_error_train, i)
-        writer.add_scalar('train/exp_smooth_error_{}'.format(ex), exp_smoothing * (torch.argmax(model.prediction[i]).item() != Y[i]) + (1 - exp_smoothing) * prev_train, i)
+        pred = model.forward(X_base[i].reshape(1, n_base_feat), X_aux[i].reshape(1, n_aux_feat), aux_mask[i].reshape(1, n_aux_feat))
+        cumulative_error_train += torch.argmax(pred).item() != Y[i]
+        # cumulative_error_train += torch.argmax(model.prediction[i]).item() != Y[i]
+        writer.add_scalar('train/cumulative_error', cumulative_error_train, i)
+        writer.add_scalar('train/exp_smooth_error', exp_smoothing * (torch.argmax(pred).item() != Y[i]) + (1 - exp_smoothing) * prev_train, i)
         prev_train = exp_smoothing * (torch.argmax(model.prediction[i]).item() != Y[i]) + (1 - exp_smoothing) * prev_train
-        writer.add_scalar('train/norm_error_{}'.format(ex), cumulative_error_train/i, i)
-        writer.add_scalar('train/training_loss_{}'.format(ex), model.loss_array[-1], i)
+        writer.add_scalar('train/norm_error', cumulative_error_train/i, i)
+        writer.add_scalar('train/training_loss', model.loss_array[-1], i)
 
     # Calculate error or loss
     if data_name == "ItalyPowerDemand":
