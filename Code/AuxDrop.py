@@ -108,6 +108,9 @@ class AuxDrop_ODL(nn.Module):
         self.layerwise_loss_array = []
         self.prediction = []
 
+        self.loss_fn = nn.CrossEntropyLoss()
+
+
     # Initialize the gradients of all the parameters with 0.
     def zero_grad(self):
         for i in range(self.max_num_hidden_layers - 2):

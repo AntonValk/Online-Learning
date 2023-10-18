@@ -40,9 +40,9 @@ type = "variable_p"
 #  "AuxDrop_ODL_RandomInAuxLayer" - On ODL framework, Random Dropout applied in the AuxLayer
 # "AuxDrop_ODL_RandomInFirstLayer_AllFeatToFirst" - On ODL framework, Random Dropout applied in the first layer and all the features (base + auxiliary) are passed to the first layer
 
-# model_to_run = "AuxDrop_ODL"
+model_to_run = "AuxDrop_ODL"
 # model_to_run = "AuxDrop_OGD"
-model_to_run = "ResidualSingleStage"
+# model_to_run = "ResidualSingleStage"
 
 # Values to change
 n = 0.01
@@ -64,7 +64,7 @@ loss_list = []
 # for ex in range(number_of_experiments):
 def run_trial(ex):
     # default `log_dir` is "runs" - we'll be more specific here
-    writer = SummaryWriter(log_dir=f"runs/{data_name}/{model_to_run}/{ex}", comment="_LR_"+str(n))
+    writer = SummaryWriter(log_dir=f"runs/{data_name}/MODEL-{model_to_run}-SEED-{ex}-LR-{str(n)}")
     trial_stats = 0
     print("Experiment number ", ex + 1)
     seed = ex
@@ -162,6 +162,8 @@ def run_trial(ex):
     prev_train = prev_test = 0
     for i in tqdm(range(N)):
         pred = model.forward(X_base[i].reshape(1, n_base_feat), X_aux[i].reshape(1, n_aux_feat), aux_mask[i].reshape(1, n_aux_feat))
+        if len(pred.shape) > 2:
+            pred = pred[-1]
         cumulative_error_test += torch.argmax(pred).item() != Y[i]
         writer.add_scalar('test/cumulative_error', cumulative_error_test, i)
         writer.add_scalar('test/exp_smooth_error', exp_smoothing * (torch.argmax(pred).item() != Y[i]) + (1 - exp_smoothing) * prev_test, i)
@@ -178,7 +180,11 @@ def run_trial(ex):
         prev_train = exp_smoothing * (torch.argmax(model.prediction[i]).item() != Y[i]) + (1 - exp_smoothing) * prev_train
         writer.add_scalar('train/norm_error', cumulative_error_train/i, i)
         writer.add_scalar('train/training_loss', model.loss_array[-1], i)
-
+        if hasattr(model, 'alpha_array'):
+            # indices = [str(i) for i in range(len(model.alpha_array[-1]))]
+            # writer.add_scalars('alphas/values', dict(zip(indices, model.alpha_array[-1])), i)
+            for j in range(len(model.alpha_array[-1])):
+                writer.add_scalar(f'alphas/{str(j)}', model.alpha_array[-1][j], i)
     # Calculate error or loss
     if data_name == "ItalyPowerDemand":
         loss = np.mean(model.loss_array)
