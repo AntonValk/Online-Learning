@@ -143,17 +143,17 @@ class AuxDrop_ODL(nn.Module):
             real_output.view(self.batch_size, self.n_classes),
             Y.view(self.batch_size).long(),
         )
-        self.loss_array.append(loss.detach().numpy())
+        self.loss_array = [loss.detach().numpy()]
 
-        if show_loss:
-            if (len(self.loss_array) % 1000) == 0:
-                print(
-                    "WARNING: Set 'show_loss' to 'False' when not debugging. "
-                    "It will deteriorate the fitting performance."
-                )
-                loss = np.mean(self.loss_array[-1000:])
-                print("Alpha:" + str(self.alpha.data.cpu().numpy()))
-                print("Training Loss: " + str(loss))
+        # if show_loss:
+        #     if (len(self.loss_array) % 1000) == 0:
+        #         print(
+        #             "WARNING: Set 'show_loss' to 'False' when not debugging. "
+        #             "It will deteriorate the fitting performance."
+        #         )
+        #         loss = np.mean(self.loss_array[-1000:])
+        #         print("Alpha:" + str(self.alpha.data.cpu().numpy()))
+        #         print("Training Loss: " + str(loss))
 
         losses_per_layer = []
 
@@ -221,11 +221,12 @@ class AuxDrop_ODL(nn.Module):
         self.alpha = Parameter(self.alpha / z_t, requires_grad=False).to(self.device)
 
         # To save the loss
-        detached_loss = []
-        for i in range(len(losses_per_layer)):
-            detached_loss.append(losses_per_layer[i].detach().numpy())
-        self.layerwise_loss_array.append(np.asarray(detached_loss))
-        self.alpha_array.append(self.alpha.detach().numpy())
+        # detached_loss = []
+        # for i in range(len(losses_per_layer)):
+        #     detached_loss.append(losses_per_layer[i].detach().numpy())
+        # self.layerwise_loss_array.append(np.asarray(detached_loss))
+        # self.alpha_array.append(self.alpha.detach().numpy())
+        self.alpha_array = [self.alpha]
 
     # Forward pass. Get the output from each layer.
     def forward(self, X, aux_feat, aux_mask):

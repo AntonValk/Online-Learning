@@ -26,7 +26,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 # Data description
 # "german", "svmguide3", "magic04", "a8a", "ItalyPowerDemand", "SUSY", "HIGGS"
-data_name = "german"
+data_name = "HIGGS"
 
 # Choose the type of data unavailability
 # type can be - "variable_p", "trapezoidal", "obsolete_sudden"
@@ -45,10 +45,10 @@ model_to_run = "AuxDrop_ODL"
 # model_to_run = "ResidualSingleStage"
 
 # Values to change
-n = 0.01
-aux_feat_prob = 0.75
+n = 0.05
+aux_feat_prob = 0.5
 dropout_p = 0.3
-max_num_hidden_layers = 6
+max_num_hidden_layers = 11
 qtd_neuron_per_hidden_layer = 50
 n_classes = 2
 aux_layer = 3
@@ -57,7 +57,7 @@ batch_size = 1
 b = 0.99
 s = 0.2
 use_cuda = False
-number_of_experiments = 20
+number_of_experiments = 5
 
 error_list = []
 loss_list = []
