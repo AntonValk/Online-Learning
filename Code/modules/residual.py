@@ -257,7 +257,8 @@ class AuxDrop_OGD(nn.Module):
         optimizer = optim.SGD(self.parameters(), lr=self.n)
         optimizer.zero_grad()
         y_pred = self.forward(X_data, aux_data, aux_mask)
-        self.prediction.append(y_pred)
+        # self.prediction.append(y_pred)
+        self.prediction = [y_pred]
         loss = self.loss_fn(y_pred, torch.tensor(Y_data, dtype=torch.long))
         self.loss_array.append(loss.item())
         loss.backward()
@@ -415,7 +416,8 @@ class SingleStageResidualNetODL(t.nn.Module):
         self.validate_input_Y(Y_data)
 
         out = self.forward()
-        self.prediction.append(out)
+        # self.prediction.append(out)
+        self.prediction = [out]
 
         criterion = nn.CrossEntropyLoss().to(self.device)
         loss = criterion(
