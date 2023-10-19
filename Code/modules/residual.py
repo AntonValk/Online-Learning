@@ -501,12 +501,12 @@ class SingleStageResidualNetODL(t.nn.Module):
         z_t = torch.sum(self.alpha)
         self.alpha = Parameter(self.alpha / z_t, requires_grad=False).to(self.device)
 
-        # To save the loss
-        detached_loss = []
-        for i in range(len(losses_per_layer)):
-            detached_loss.append(losses_per_layer[i].detach().numpy())
-        self.layerwise_loss_array.append(np.asarray(detached_loss))
-        self.alpha_array.append(self.alpha.detach().numpy())
+        # # To save the loss
+        # detached_loss = []
+        # for i in range(len(losses_per_layer)):
+        #     detached_loss.append(losses_per_layer[i].detach().numpy())
+        # self.layerwise_loss_array.append(np.asarray(detached_loss))
+        # self.alpha_array.append(self.alpha.detach().numpy())
 
         # optimizer = optim.SGD(self.parameters(), lr=self.n)
         # optimizer.zero_grad()
