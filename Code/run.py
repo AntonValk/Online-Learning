@@ -40,8 +40,8 @@ type = "variable_p"
 #  "AuxDrop_ODL_RandomInAuxLayer" - On ODL framework, Random Dropout applied in the AuxLayer
 # "AuxDrop_ODL_RandomInFirstLayer_AllFeatToFirst" - On ODL framework, Random Dropout applied in the first layer and all the features (base + auxiliary) are passed to the first layer
 
-model_to_run = "AuxDrop_ODL"
-# model_to_run = "AuxDrop_OGD"
+# model_to_run = "AuxDrop_ODL"
+model_to_run = "AuxDrop_OGD"
 # model_to_run = "ResidualSingleStage"
 
 # Values to change
@@ -112,7 +112,7 @@ def run_trial(ex):
                 use_cuda=use_cuda,
             )
     elif model_to_run == "AuxDrop_OGD":
-        if data_name in ["ItalyPowerDemand", "SUSY", "HIGGS"]:
+        if data_name in ["ItalyPowerDemand"]:
             print(
                 "You need to make some changes in the code to support AuxDrop_OGD with ",
                 data_name,

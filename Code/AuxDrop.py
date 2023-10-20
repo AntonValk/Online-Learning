@@ -681,7 +681,7 @@ class AuxDrop_OGD(nn.Module):
         optimizer.zero_grad()
         y_pred = self.forward(X_data, aux_data, aux_mask)
         # self.prediction.append(y_pred)
-        self.prediction = [real_output]
+        self.prediction = [y_pred]
         loss = self.loss_fn(y_pred, torch.tensor(Y_data, dtype=torch.long))
         self.loss_array.append(loss.item())
         loss.backward()
