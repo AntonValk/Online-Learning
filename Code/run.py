@@ -26,7 +26,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 # Data description
 # "german", "svmguide3", "magic04", "a8a", "ItalyPowerDemand", "SUSY", "HIGGS"
-data_name = "HIGGS"
+data_name = "SUSY"
 
 # Choose the type of data unavailability
 # type can be - "variable_p", "trapezoidal", "obsolete_sudden"
@@ -41,11 +41,11 @@ type = "variable_p"
 # "AuxDrop_ODL_RandomInFirstLayer_AllFeatToFirst" - On ODL framework, Random Dropout applied in the first layer and all the features (base + auxiliary) are passed to the first layer
 
 # model_to_run = "AuxDrop_ODL"
-model_to_run = "AuxDrop_OGD"
-# model_to_run = "ResidualSingleStage"
+# model_to_run = "AuxDrop_OGD"
+model_to_run = "ResidualSingleStage"
 
 # Values to change
-n = 0.05
+n = 0.1
 aux_feat_prob = 0.5
 dropout_p = 0.3
 max_num_hidden_layers = 11
@@ -231,12 +231,16 @@ if data_name == "ItalyPowerDemand":
     )
 else:
     print(
+        "Model:",
+        model_to_run,
         "The mean error in the ",
         data_name,
         " dataset for ",
         number_of_experiments,
         " number of experiments is ",
         np.mean(result),
-        " and the standard deviation is ",
+        "$\pm$",
         np.std(result),
+        "with lr=",
+        n
     )

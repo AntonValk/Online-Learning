@@ -120,9 +120,9 @@ class SingleStageResidualNet(t.nn.Module):
         optimizer = optim.SGD(self.parameters(), lr=self.n)
         optimizer.zero_grad()
         y_pred = self.forward(X_data, aux_data, aux_mask)
-        self.prediction.append(y_pred)
+        self.prediction = [y_pred]
         loss = self.loss_fn(y_pred, torch.tensor(Y_data, dtype=torch.long))
-        self.loss_array.append(loss.item())
+        self.loss_array = [loss.item()]
         loss.backward()
         optimizer.step()
 
