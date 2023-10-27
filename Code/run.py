@@ -20,13 +20,13 @@ from AuxDrop import (
 )
 from dataset import dataset
 from joblib import Parallel, delayed
-from modules.residual import SingleStageResidualNet
+from modules.residual import SingleStageResidualNet, SingleStageResidualNetODL
 
 from torch.utils.tensorboard import SummaryWriter
 
 # Data description
 # "german", "svmguide3", "magic04", "a8a", "ItalyPowerDemand", "SUSY", "HIGGS"
-data_name = "SUSY"
+data_name = "a8a"
 
 # Choose the type of data unavailability
 # type can be - "variable_p", "trapezoidal", "obsolete_sudden"
@@ -42,10 +42,11 @@ type = "variable_p"
 
 # model_to_run = "AuxDrop_ODL"
 # model_to_run = "AuxDrop_OGD"
-model_to_run = "ResidualSingleStage"
+# model_to_run = "ResidualSingleStage"
+model_to_run = "ResidualSingleStage_ODL"
 
 # Values to change
-n = 0.1
+n = 0.05
 aux_feat_prob = 0.5
 dropout_p = 0.3
 max_num_hidden_layers = 11
@@ -153,6 +154,23 @@ def run_trial(ex):
                 lr=n,
             )
         
+    elif model_to_run == "ResidualSingleStage_ODL":
+        model = SingleStageResidualNetODL(
+                num_blocks_enc=2,
+                num_layers_enc=2,
+                layer_width_enc=100,
+                num_blocks_stage=2, 
+                num_layers_stage=2, 
+                layer_width_stage=100,
+                embedding_dim=0,
+                embedding_num=0,
+                embedding_size=0,
+                size_in=n_base_feat + n_aux_feat,
+                size_out=n_classes,
+                dropout=dropout_p,
+                lr=n,
+            )
+        
 
     # Run the model
     N = X_base.shape[0]
@@ -174,8 +192,11 @@ def run_trial(ex):
         with torch.no_grad():
             if hasattr(model, 'alpha_array'):
                 pred = model.forward(X_base[i].reshape(1, n_base_feat), X_aux[i].reshape(1, n_aux_feat), aux_mask[i].reshape(1, n_aux_feat))
-                pred = torch.sum(torch.mul(model.alpha.view(model.max_num_hidden_layers - 2, 1).repeat(1, model.batch_size).view(model.max_num_hidden_layers - 2, 
+                if isinstance(model, AuxDrop_ODL):
+                    pred = torch.sum(torch.mul(model.alpha.view(model.max_num_hidden_layers - 2, 1).repeat(1, model.batch_size).view(model.max_num_hidden_layers - 2, 
                                                                         model.batch_size, 1), pred), 0)
+                elif isinstance(model, SingleStageResidualNetODL):
+                    pred = pred[0]
             else:
                 pred = model.forward(X_base[i].reshape(1, n_base_feat), X_aux[i].reshape(1, n_aux_feat), aux_mask[i].reshape(1, n_aux_feat))
 

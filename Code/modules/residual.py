@@ -277,12 +277,21 @@ class SingleStageResidualNetODL(t.nn.Module):
     def __init__(self,
                  num_blocks_enc: int, num_layers_enc: int, layer_width_enc,
                  num_blocks_stage: int, num_layers_stage: int, layer_width_stage: int,
-                 dropout: float, size_in: int, size_out: int,
-                 embedding_dim: int, embedding_size: int, embedding_num: int, layer_norm: bool = True, eps: float=1e-6, lr: float=1e-3,
-                 b: float=0.99, s: float = 0.2):
+                 dropout: float, size_in: int, size_out: int, embedding_dim: int, embedding_size: int, embedding_num: int, batch_size: int = 1, 
+                 layer_norm: bool = True, eps: float=1e-6, lr: float=1e-3,
+                 b: float=0.99, s: float = 0.2, use_cuda: bool = False):
         super().__init__()
 
+        if torch.cuda.is_available() and use_cuda:
+            print("Using CUDA :]")
+
+        self.device = torch.device(
+            "cuda:0" if torch.cuda.is_available() and use_cuda else "cpu"
+        )
+
         self.layer_width_enc = layer_width_enc
+        self.batch_size = batch_size
+        self.n_classes = size_out
 
         self.max_num_hidden_layers = num_blocks_enc + num_blocks_stage
         
@@ -296,14 +305,11 @@ class SingleStageResidualNetODL(t.nn.Module):
         self.p = Parameter(torch.tensor(dropout), requires_grad=False).to(self.device)
 
         # Stores hidden and output layers
-        self.hidden_layers = []
         self.output_layers = []
 
         for i in range(self.max_num_hidden_layers):
-            self.hidden_layers.append(nn.Linear(layer_width_enc, layer_width_enc))
             self.output_layers.append(nn.Linear(layer_width_enc, size_out))
 
-        self.hidden_layers = nn.ModuleList(self.hidden_layers).to(self.device)
         self.output_layers = nn.ModuleList(self.output_layers).to(self.device)
 
         # IMPORTANT NOTE: We don't use LayerNorm in these blocks as this would inject inputs without taking into account their weights
@@ -323,7 +329,7 @@ class SingleStageResidualNetODL(t.nn.Module):
                                  [FCBlock(num_layers=num_layers_stage, layer_width=layer_width_stage,
                                               dropout=dropout, size_in=layer_width_stage, size_out=size_out) for _ in range(num_blocks_stage - 1)]
 
-        self.model = t.nn.ModuleList(self.encoder_blocks + self.stage_blocks + self.embeddings)
+        self.model = t.nn.ModuleList(self.encoder_blocks + self.stage_blocks )
 
         # The alpha values sum to 1 and are equal at the beginning of the training.
         self.alpha = Parameter(
@@ -342,8 +348,8 @@ class SingleStageResidualNetODL(t.nn.Module):
         for i in range(self.max_num_hidden_layers):
             self.output_layers[i].weight.grad.data.fill_(0)
             self.output_layers[i].bias.grad.data.fill_(0)
-            self.hidden_layers[i].weight.grad.data.fill_(0)
-            self.hidden_layers[i].bias.grad.data.fill_(0)
+            self.model[i][-1].weight.grad.data.fill_(0)
+            self.model[i][-1].weight.grad.data.fill_(0)
 
 
     def encode(self, x: t.Tensor, *args) -> t.Tensor:
@@ -379,7 +385,12 @@ class SingleStageResidualNetODL(t.nn.Module):
         for i, block in enumerate(self.stage_blocks):
             backcast, f = block(backcast)
             stage_forecast = stage_forecast + f
-            self.hidden_preds.append(F.softmax(self.output_layers[i+len(self.encoder_blocks)](stage_forecast), dim=1))
+            # print(stage_forecast.shape)
+            # print(backcast.shape)
+            # exit()
+            # hid_out = self.hidden_layers[i+len(self.encoder_blocks)](backcast)
+            # self.hidden_preds.append(F.softmax(self.output_layers[i+len(self.encoder_blocks)](hid_out), dim=1))
+            self.hidden_preds.append(F.softmax(self.output_layers[i+len(self.encoder_blocks)](backcast), dim=1))
         pred_per_layer = torch.stack(self.hidden_preds)
         return pred_per_layer
 
@@ -396,7 +407,7 @@ class SingleStageResidualNetODL(t.nn.Module):
         full_embedding = self.encode(x)
         predictions_per_layer = self.decode(full_embedding)
         return torch.sum(torch.mul(self.alpha.view(self.max_num_hidden_layers, 1).repeat(1, self.batch_size).view(self.max_num_hidden_layers, self.batch_size, 1),
-                predictions_per_layer), 0)
+                predictions_per_layer), 0), predictions_per_layer
 
     def validate_input_X(self, data):
         if len(data.shape) != 2:
@@ -410,21 +421,20 @@ class SingleStageResidualNetODL(t.nn.Module):
                 "Wrong dimension for this Y data. It should have only one dimensions."
             )
 
-    def partial_fit(self, X_data, aux_data, aux_mask, Y_data, show_loss=False):
-        self.validate_input_X(X_data)
-        self.validate_input_X(aux_data)
-        self.validate_input_Y(Y_data)
+    def update_weights(self, X_data, aux_data, aux_mask, Y_data, show_loss=False):
+        optimizer = optim.SGD(self.parameters(), lr=self.n)
+        optimizer.zero_grad()
+        Y = torch.from_numpy(Y_data).to(self.device)
 
-        out = self.forward()
-        # self.prediction.append(out)
+        out, predictions_per_layer = self.forward(X_data, aux_data, aux_mask)
         self.prediction = [out]
 
         criterion = nn.CrossEntropyLoss().to(self.device)
         loss = criterion(
-            real_output.view(self.batch_size, self.n_classes),
-            Y.view(self.batch_size).long(),
+            out.view(self.batch_size, self.n_classes),
+            Y.long(),
         )
-        self.loss_array.append(loss.detach().numpy())
+        self.loss_array = [loss.detach().numpy()]
 
         if show_loss:
             if (len(self.loss_array) % 1000) == 0:
@@ -442,61 +452,52 @@ class SingleStageResidualNetODL(t.nn.Module):
             criterion = nn.CrossEntropyLoss().to(self.device)
             loss = criterion(
                 out.view(self.batch_size, self.n_classes),
-                Y.view(self.batch_size).long(),
+                Y.long(),
             )
             losses_per_layer.append(loss)
+        total_loss = torch.dot(self.alpha, torch.stack(losses_per_layer))
+        total_loss.backward()
+        optimizer.step()
+        
+        # w = [None] * (len(losses_per_layer))
+        # b = [None] * (len(losses_per_layer))
 
-        w = [None] * (len(losses_per_layer) + 2)
-        b = [None] * (len(losses_per_layer) + 2)
+        # with torch.no_grad():
 
-        with torch.no_grad():
+        #     for i in range(len(losses_per_layer)):
+        #         losses_per_layer[i].backward(retain_graph=True)
 
-            for i in range(len(losses_per_layer)):
-                losses_per_layer[i].backward(retain_graph=True)
+        #         self.output_layers[i].weight.data -= (
+        #             self.n * self.alpha[i] * self.output_layers[i].weight.grad.data
+        #         )
+        #         self.output_layers[i].bias.data -= (
+        #             self.n * self.alpha[i] * self.output_layers[i].bias.grad.data
+        #         )
 
-                self.output_layers[i].weight.data -= (
-                    self.n * self.alpha[i] * self.output_layers[i].weight.grad.data
-                )
-                self.output_layers[i].bias.data -= (
-                    self.n * self.alpha[i] * self.output_layers[i].bias.grad.data
-                )
+        #         if i < self.max_num_hidden_layers:
+        #             for j in range(i):
+        #                 if w[j] is None:
+        #                     w[j] = (
+        #                         self.alpha[i] * self.model[j][-1].weight.grad.data
+        #                     )
+        #                     b[j] = self.alpha[i] * self.model[j][-1].weight.grad.data
+        #                 else:
+        #                     w[j] += (
+        #                         self.alpha[i] * self.model[j][-1].weight.grad.data
+        #                     )
+        #                     b[j] += self.alpha[i] * self.model[j][-1].weight.grad.data
 
-                if i < self.aux_layer - 2:
-                    for j in range(i + 2):
-                        if w[j] is None:
-                            w[j] = (
-                                self.alpha[i] * self.hidden_layers[j].weight.grad.data
-                            )
-                            b[j] = self.alpha[i] * self.hidden_layers[j].bias.grad.data
-                        else:
-                            w[j] += (
-                                self.alpha[i] * self.hidden_layers[j].weight.grad.data
-                            )
-                            b[j] += self.alpha[i] * self.hidden_layers[j].bias.grad.data
-                if i > self.aux_layer - 3:
-                    for j in range(i + 3):
-                        if w[j] is None:
-                            w[j] = (
-                                self.alpha[i] * self.hidden_layers[j].weight.grad.data
-                            )
-                            b[j] = self.alpha[i] * self.hidden_layers[j].bias.grad.data
-                        else:
-                            w[j] += (
-                                self.alpha[i] * self.hidden_layers[j].weight.grad.data
-                            )
-                            b[j] += self.alpha[i] * self.hidden_layers[j].bias.grad.data
+        #         self.zero_grad()
 
-                self.zero_grad()
+            # for i in range(self.max_num_hidden_layers):
+            #     self.model[i][-1].weight.grad.data -= self.n * w[i]
+            #     self.model[i][-1].weight.grad.data -= self.n * b[i]
 
-            for i in range(self.max_num_hidden_layers):
-                self.hidden_layers[i].weight.data -= self.n * w[i]
-                self.hidden_layers[i].bias.data -= self.n * b[i]
-
-            for i in range(len(losses_per_layer)):
-                self.alpha[i] *= torch.pow(self.b, losses_per_layer[i])
-                self.alpha[i] = torch.max(
-                    self.alpha[i], self.s / (len(losses_per_layer))
-                )
+        for i in range(len(losses_per_layer)):
+            self.alpha[i] *= torch.pow(self.b, losses_per_layer[i])
+            self.alpha[i] = torch.max(
+                self.alpha[i], self.s / (len(losses_per_layer))
+            )
 
         z_t = torch.sum(self.alpha)
         self.alpha = Parameter(self.alpha / z_t, requires_grad=False).to(self.device)
@@ -506,7 +507,7 @@ class SingleStageResidualNetODL(t.nn.Module):
         # for i in range(len(losses_per_layer)):
         #     detached_loss.append(losses_per_layer[i].detach().numpy())
         # self.layerwise_loss_array.append(np.asarray(detached_loss))
-        # self.alpha_array.append(self.alpha.detach().numpy())
+        self.alpha_array = [self.alpha.detach().numpy()]
 
         # optimizer = optim.SGD(self.parameters(), lr=self.n)
         # optimizer.zero_grad()
@@ -519,3 +520,9 @@ class SingleStageResidualNetODL(t.nn.Module):
 
         # if show_loss:
         #     print("Loss is: ", loss)
+
+    def partial_fit(self, X_data, aux_data, aux_mask, Y_data, show_loss=False):
+        self.validate_input_X(X_data)
+        self.validate_input_X(aux_data)
+        self.validate_input_Y(Y_data)
+        self.update_weights(X_data, aux_data, aux_mask, Y_data)
