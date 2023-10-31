@@ -360,6 +360,8 @@ class SingleStageResidualNetODL(t.nn.Module):
 
         backcast = x
         encoding = 0.0
+
+        # print(len(self.prediction), len(self.loss_array), len(self.alpha_array), len(self.layerwise_loss_array), len(self.hidden_preds))
         self.hidden_preds = []
 
         # Forward pass of the first hidden layer. Apply the linear transformation and then relu. The output from the relu is the input
@@ -434,7 +436,7 @@ class SingleStageResidualNetODL(t.nn.Module):
             out.view(self.batch_size, self.n_classes),
             Y.long(),
         )
-        self.loss_array = [loss.detach().numpy()]
+        self.loss_array = [loss.item()]
 
         if show_loss:
             if (len(self.loss_array) % 1000) == 0:
@@ -448,10 +450,10 @@ class SingleStageResidualNetODL(t.nn.Module):
 
         losses_per_layer = []
 
-        for out in predictions_per_layer:
+        for o in predictions_per_layer:
             criterion = nn.CrossEntropyLoss().to(self.device)
             loss = criterion(
-                out.view(self.batch_size, self.n_classes),
+                o.view(self.batch_size, self.n_classes),
                 Y.long(),
             )
             losses_per_layer.append(loss)
@@ -492,13 +494,13 @@ class SingleStageResidualNetODL(t.nn.Module):
             # for i in range(self.max_num_hidden_layers):
             #     self.model[i][-1].weight.grad.data -= self.n * w[i]
             #     self.model[i][-1].weight.grad.data -= self.n * b[i]
-
-        for i in range(len(losses_per_layer)):
-            self.alpha[i] *= torch.pow(self.b, losses_per_layer[i])
-            self.alpha[i] = torch.max(
-                self.alpha[i], self.s / (len(losses_per_layer))
-            )
-
+        with torch.no_grad():
+            for i in range(len(losses_per_layer)):
+                self.alpha[i] *= torch.pow(self.b, losses_per_layer[i])
+                self.alpha[i] = torch.max(
+                    self.alpha[i], self.s / (len(losses_per_layer))
+                )
+    
         z_t = torch.sum(self.alpha)
         self.alpha = Parameter(self.alpha / z_t, requires_grad=False).to(self.device)
 
@@ -508,6 +510,7 @@ class SingleStageResidualNetODL(t.nn.Module):
         #     detached_loss.append(losses_per_layer[i].detach().numpy())
         # self.layerwise_loss_array.append(np.asarray(detached_loss))
         self.alpha_array = [self.alpha.detach().numpy()]
+        self.hidden_preds = []
 
         # optimizer = optim.SGD(self.parameters(), lr=self.n)
         # optimizer.zero_grad()
@@ -520,6 +523,7 @@ class SingleStageResidualNetODL(t.nn.Module):
 
         # if show_loss:
         #     print("Loss is: ", loss)
+        # print(len(self.prediction), len(self.loss_array), len(self.alpha_array), len(self.layerwise_loss_array), len(self.hidden_preds))
 
     def partial_fit(self, X_data, aux_data, aux_mask, Y_data, show_loss=False):
         self.validate_input_X(X_data)
