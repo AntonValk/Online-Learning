@@ -20,13 +20,13 @@ from AuxDrop import (
 )
 from dataset import dataset
 from joblib import Parallel, delayed
-from modules.residual import SingleStageResidualNet, SingleStageResidualNetODL
+from modules.residual import SingleStageResidualNet, SingleStageResidualNetODL, Fast_AuxDrop_ODL
 
 from torch.utils.tensorboard import SummaryWriter
 
 # Data description
 # "german", "svmguide3", "magic04", "a8a", "ItalyPowerDemand", "SUSY", "HIGGS"
-data_name = "a8a"
+data_name = "HIGGS"
 
 # Choose the type of data unavailability
 # type can be - "variable_p", "trapezoidal", "obsolete_sudden"
@@ -43,7 +43,8 @@ type = "variable_p"
 # model_to_run = "AuxDrop_ODL"
 # model_to_run = "AuxDrop_OGD"
 # model_to_run = "ResidualSingleStage"
-model_to_run = "ResidualSingleStage_ODL"
+# model_to_run = "ResidualSingleStage_ODL"
+model_to_run = "Fast_AuxDrop_ODL"
 
 # Values to change
 n = 0.05
@@ -112,6 +113,22 @@ def run_trial(ex):
                 n_aux_feat=n_aux_feat,
                 use_cuda=use_cuda,
             )
+    elif model_to_run == "Fast_AuxDrop_ODL":
+        model = Fast_AuxDrop_ODL(
+                    features_size=n_base_feat,
+                    max_num_hidden_layers=max_num_hidden_layers,
+                    qtd_neuron_per_hidden_layer=qtd_neuron_per_hidden_layer,
+                    n_classes=n_classes,
+                    aux_layer=aux_layer,
+                    n_neuron_aux_layer=n_neuron_aux_layer,
+                    batch_size=batch_size,
+                    b=b,
+                    n=n,
+                    s=s,
+                    dropout_p=dropout_p,
+                    n_aux_feat=n_aux_feat,
+                    use_cuda=use_cuda,
+                )
     elif model_to_run == "AuxDrop_OGD":
         if data_name in ["ItalyPowerDemand"]:
             print(
