@@ -12,6 +12,147 @@ from modules.custom_layers import FCBlockNorm
 from typing import Tuple
 
 
+
+class SetSingleStageResidualNet(t.nn.Module):
+    """
+    Fully-connected residual architechture with OGD online learning backbone
+    """
+
+    def __init__(self,
+                 num_blocks_enc: int, num_layers_enc: int, layer_width_enc,
+                 num_blocks_stage: int, num_layers_stage: int, layer_width_stage: int,
+                 dropout: float, size_in: int, size_out: int,
+                 embedding_dim: int = 1, embedding_size: int = 50, embedding_num: int = 1, layer_norm: bool = True, eps: float = 1e-6, lr=1e-3):
+        super().__init__()
+
+        self.layer_width_enc = layer_width_enc
+        
+        self.embeddings = [Embedding(num_embeddings=embedding_size, embedding_dim=embedding_dim) for _ in
+                           range(embedding_num)]
+        # self.embeddings = nn.Embedding(num_embeddings=embedding_size, embedding_dim=embedding_dim)
+        
+        # self.embeddings = []
+        # for ne, ew in zip(embedding_num, embedding_size):
+        #     self.embeddings.append(torch.nn.Embedding(num_embeddings=ne, embedding_dim=ew))
+
+        # self.embeddings = torch.nn.ModuleList(self.embeddings)
+        self.n=lr
+
+        # IMPORTANT NOTE: We don't use LayerNorm in these blocks as this would inject inputs without taking into account their weights
+        self.encoder_blocks = [FCBlock(num_layers=num_layers_enc, layer_width=layer_width_enc, dropout=dropout,
+                                             size_in=size_in + embedding_dim * embedding_num, size_out=layer_width_enc)]
+        self.encoder_blocks += [FCBlock(num_layers=num_layers_enc, layer_width=layer_width_enc, dropout=dropout,
+                                              size_in=layer_width_enc, size_out=layer_width_enc) for _ in range(num_blocks_enc - 1)]
+
+        if layer_norm:
+            self.stage_blocks = [FCBlockNorm(num_layers=num_layers_stage, layer_width=layer_width_stage, dropout=dropout,
+                                                size_in=layer_width_enc, size_out=size_out, eps=eps)] + \
+                                 [FCBlockNorm(num_layers=num_layers_stage, layer_width=layer_width_stage, dropout=dropout,
+                                                size_in=layer_width_stage, size_out=size_out, eps=eps) for _ in range(num_blocks_stage - 1)]
+        else:
+            self.stage_blocks = [FCBlock(num_layers=num_layers_stage, layer_width=layer_width_stage,
+                                              dropout=dropout, size_in=layer_width_enc, size_out=size_out)] + \
+                                 [FCBlock(num_layers=num_layers_stage, layer_width=layer_width_stage,
+                                              dropout=dropout, size_in=layer_width_stage, size_out=size_out) for _ in range(num_blocks_stage - 1)]
+
+        self.model = t.nn.ModuleList(self.encoder_blocks + self.stage_blocks + self.embeddings)
+        
+        self.loss_fn = nn.CrossEntropyLoss()
+        self.prediction = []
+        self.loss_array = []
+
+    def encode(self, x: t.Tensor, weights: t.Tensor, *args) -> t.Tensor:
+        """
+        x the continuous input : BxF
+        e the categorical inputs BxC
+        """
+
+        weights_sum = weights.sum(dim=1, keepdim=True)
+        # weights_sum[weights_sum == 0.0] = 1
+
+        ee = [x]
+        for i, v in enumerate(args):
+            ee.append(self.embeddings[i](v).T)
+
+        backcast = torch.cat(ee, dim=-1)
+        backcast = backcast.reshape(backcast.shape[0], x.shape[1], -1)
+
+        encoding = 0.0
+        for i, block in enumerate(self.encoder_blocks):
+            backcast, e = block(backcast)
+            encoding = encoding + e
+
+            # prototype = (encoding).sum(dim=1, keepdim=True)
+            # weighted average
+            # print(encoding.shape)
+            # print(weights.shape)
+            prototype = (encoding * weights).sum(dim=1, keepdim=True) / weights_sum
+
+            backcast = backcast - prototype / (i + 1.0)
+            backcast = t.relu(backcast)
+
+        # full_embedding = (encoding).sum(dim=1, keepdim=True)
+        # full_embedding = full_embedding.squeeze(1)
+        full_embedding = (encoding * weights).sum(dim=1, keepdim=True) / weights_sum
+        # print(full_embedding.shape)
+        full_embedding = full_embedding.squeeze(1)
+        # full_embedding = encoding#.squeeze(1)
+        return full_embedding
+
+    def decode(self, full_embedding: t.Tensor) -> Tuple[t.Tensor, t.Tensor]:
+        backcast = full_embedding
+        stage_forecast = 0.0
+        for block in self.stage_blocks:
+            backcast, f = block(backcast)
+            stage_forecast = stage_forecast + f
+        return stage_forecast
+
+    def forward(self, x: t.Tensor, *args) -> Tuple[t.Tensor, t.Tensor]:
+        """
+        x the continuous input BxF
+        weights mask BxN
+        e the categorical inputs BxC
+        """
+
+        X = t.from_numpy(x).float()
+        # aux_feat = args[0]
+        # aux_mask = args[1]
+        aux_feat = t.from_numpy(args[0]).float()
+        aux_mask = t.from_numpy(args[1]).float()
+        x = t.cat([X, aux_feat[aux_mask==1].unsqueeze(0)], axis=1)
+        # print(X, aux_mask, aux_feat, x)
+        # INSERT AUGMENTATIONS HERE
+        weights = torch.cat([torch.ones_like(X), aux_mask], axis=1)
+        ids = torch.nonzero(weights[0]).reshape(-1)
+        full_embedding = self.encode(x, weights, ids)
+        return t.softmax(self.decode(full_embedding), dim=1)
+
+    def validate_input_X(self, data):
+        if len(data.shape) != 2:
+            raise Exception(
+                "Wrong dimension for this X data. It should have only two dimensions."
+            )
+
+    def validate_input_Y(self, data):
+        if len(data.shape) != 1:
+            raise Exception(
+                "Wrong dimension for this Y data. It should have only one dimensions."
+            )
+
+    def partial_fit(self, X_data, aux_data, aux_mask, Y_data, show_loss=False):
+        self.validate_input_X(X_data)
+        self.validate_input_X(aux_data)
+        self.validate_input_Y(Y_data)
+
+        optimizer = optim.SGD(self.parameters(), lr=self.n)
+        optimizer.zero_grad()
+        y_pred = self.forward(X_data, aux_data, aux_mask)
+        self.prediction = [y_pred]
+        loss = self.loss_fn(y_pred, torch.tensor(Y_data, dtype=torch.long))
+        self.loss_array = [loss.item()]
+        loss.backward()
+        optimizer.step()
+
 class SingleStageResidualNet(t.nn.Module):
     """
     Fully-connected residual architechture with OGD online learning backbone

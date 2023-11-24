@@ -20,13 +20,13 @@ from AuxDrop import (
 )
 from dataset import dataset
 from joblib import Parallel, delayed
-from modules.residual import SingleStageResidualNet, SingleStageResidualNetODL, Fast_AuxDrop_ODL
+from modules.residual import SingleStageResidualNet, SingleStageResidualNetODL, Fast_AuxDrop_ODL, SetSingleStageResidualNet
 
 from torch.utils.tensorboard import SummaryWriter
 
 # Data description
 # "german", "svmguide3", "magic04", "a8a", "ItalyPowerDemand", "SUSY", "HIGGS"
-data_name = "HIGGS"
+data_name = "SUSY"
 
 # Choose the type of data unavailability
 # type can be - "variable_p", "trapezoidal", "obsolete_sudden"
@@ -44,11 +44,12 @@ type = "variable_p"
 # model_to_run = "AuxDrop_OGD"
 # model_to_run = "ResidualSingleStage"
 # model_to_run = "ResidualSingleStage_ODL"
-model_to_run = "Fast_AuxDrop_ODL"
+# model_to_run = "Fast_AuxDrop_ODL"
+model_to_run = "SetSingleStageResidualNet"
 
 # Values to change
-n = 0.05
-aux_feat_prob = 0.5
+n = 0.01
+aux_feat_prob = 0.2
 dropout_p = 0.3
 max_num_hidden_layers = 11
 qtd_neuron_per_hidden_layer = 50
@@ -66,7 +67,7 @@ loss_list = []
 # for ex in range(number_of_experiments):
 def run_trial(ex):
     # default `log_dir` is "runs" - we'll be more specific here
-    writer = SummaryWriter(log_dir=f"runs/{data_name}/MODEL-{model_to_run}-SEED-{ex}-LR-{str(n)}")
+    writer = SummaryWriter(log_dir=f"main/{data_name}/MODEL-{model_to_run}-SEED-{ex}-LR-{str(n)}-L-{max_num_hidden_layers}-EMB_DIM-{qtd_neuron_per_hidden_layer}-p-{aux_feat_prob}")
     trial_stats = 0
     print("Experiment number ", ex + 1)
     seed = ex
@@ -166,6 +167,20 @@ def run_trial(ex):
                 embedding_num=0,
                 embedding_size=0,
                 size_in=n_base_feat + n_aux_feat,
+                size_out=n_classes,
+                dropout=dropout_p,
+                lr=n,
+            )
+        
+    elif model_to_run == "SetSingleStageResidualNet":
+        model = SetSingleStageResidualNet(
+                num_blocks_enc=2,
+                num_layers_enc=2,
+                layer_width_enc=24,
+                num_blocks_stage=2, 
+                num_layers_stage=2, 
+                layer_width_stage=100,
+                size_in=1,
                 size_out=n_classes,
                 dropout=dropout_p,
                 lr=n,
@@ -271,6 +286,10 @@ else:
     print(
         "Model:",
         model_to_run,
+        "num. layers:",
+        max_num_hidden_layers,
+        "hidden dim:",
+        qtd_neuron_per_hidden_layer,
         "The mean error in the ",
         data_name,
         " dataset for ",
