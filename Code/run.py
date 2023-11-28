@@ -20,7 +20,7 @@ from AuxDrop import (
 )
 from dataset import dataset
 from joblib import Parallel, delayed
-from modules.residual import SingleStageResidualNet, SingleStageResidualNetODL, Fast_AuxDrop_ODL, SetSingleStageResidualNet
+from modules.residual import SingleStageResidualNet, SingleStageResidualNetODL, Fast_AuxDrop_ODL, SetSingleStageResidualNet, ODLSetSingleStageResidualNet
 
 from torch.utils.tensorboard import SummaryWriter
 
@@ -45,11 +45,12 @@ type = "variable_p"
 # model_to_run = "ResidualSingleStage"
 # model_to_run = "ResidualSingleStage_ODL"
 # model_to_run = "Fast_AuxDrop_ODL"
-model_to_run = "SetSingleStageResidualNet"
+# model_to_run = "SetSingleStageResidualNet"
+model_to_run = "ODLSetSingleStageResidualNet"
 
 # Values to change
 n = 0.01
-aux_feat_prob = 0.2
+aux_feat_prob = 0.5
 dropout_p = 0.3
 max_num_hidden_layers = 11
 qtd_neuron_per_hidden_layer = 50
@@ -186,6 +187,20 @@ def run_trial(ex):
                 lr=n,
             )
         
+    elif model_to_run == "ODLSetSingleStageResidualNet":
+        model = ODLSetSingleStageResidualNet(
+                num_blocks_enc=2,
+                num_layers_enc=2,
+                layer_width_enc=24,
+                num_blocks_stage=2, 
+                num_layers_stage=2, 
+                layer_width_stage=24,
+                size_in=1,
+                size_out=n_classes,
+                dropout=dropout_p,
+                lr=n,
+            )
+        
     elif model_to_run == "ResidualSingleStage_ODL":
         model = SingleStageResidualNetODL(
                 num_blocks_enc=2,
@@ -227,7 +242,7 @@ def run_trial(ex):
                 if isinstance(model, AuxDrop_ODL):
                     pred = torch.sum(torch.mul(model.alpha.view(model.max_num_hidden_layers - 2, 1).repeat(1, model.batch_size).view(model.max_num_hidden_layers - 2, 
                                                                         model.batch_size, 1), pred), 0)
-                elif isinstance(model, SingleStageResidualNetODL):
+                elif isinstance(model, SingleStageResidualNetODL) or isinstance(model, ODLSetSingleStageResidualNet):
                     pred = pred[0]
             else:
                 pred = model.forward(X_base[i].reshape(1, n_base_feat), X_aux[i].reshape(1, n_aux_feat), aux_mask[i].reshape(1, n_aux_feat))

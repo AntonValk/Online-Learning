@@ -11,7 +11,296 @@ from modules.custom_layers import Embedding, FCBlock
 from modules.custom_layers import FCBlockNorm
 from typing import Tuple
 
+class ODLSetSingleStageResidualNet(t.nn.Module):
+    """
+    Fully-connected residual architechture with OGD online learning backbone
+    """
 
+    def __init__(self,
+                 num_blocks_enc: int, num_layers_enc: int, layer_width_enc,
+                 num_blocks_stage: int, num_layers_stage: int, layer_width_stage: int,
+                 dropout: float, size_in: int, size_out: int,
+                 embedding_dim: int = 10, embedding_size: int = 50, embedding_num: int = 1, layer_norm: bool = True, eps: float = 1e-6, lr=1e-3,
+                 b: float=0.99, s: float = 0.2, use_cuda: bool = False, batch_size: int = 1, n_classes: int = 2):
+                 
+        super().__init__()
+
+        self.layer_width_enc = layer_width_enc
+        self.batch_size = batch_size
+        self.n_classes = n_classes
+        self.device = torch.device(
+            "cuda:0" if torch.cuda.is_available() and use_cuda else "cpu"
+        )
+        
+        self.embeddings = [Embedding(num_embeddings=embedding_size, embedding_dim=embedding_dim) for _ in
+                           range(embedding_num)]
+        
+        self.n=lr
+        self.b = Parameter(torch.tensor(b), requires_grad=False).to(self.device)
+        self.n = Parameter(torch.tensor(lr), requires_grad=False).to(self.device)
+        self.s = Parameter(torch.tensor(s), requires_grad=False).to(self.device)
+        self.p = Parameter(torch.tensor(dropout), requires_grad=False).to(self.device)
+
+        self.max_num_hidden_layers = num_blocks_enc + num_blocks_stage
+
+        # Stores hidden and output layers
+        self.output_layers = []
+
+        for i in range(self.max_num_hidden_layers):
+            self.output_layers.append(nn.Linear(layer_width_enc, size_out))
+
+        self.output_layers = nn.ModuleList(self.output_layers).to(self.device)
+        # self.embeddings = nn.Embedding(num_embeddings=embedding_size, embedding_dim=embedding_dim)
+        
+        # self.embeddings = []
+        # for ne, ew in zip(embedding_num, embedding_size):
+        #     self.embeddings.append(torch.nn.Embedding(num_embeddings=ne, embedding_dim=ew))
+
+        # self.embeddings = torch.nn.ModuleList(self.embeddings)
+
+        # IMPORTANT NOTE: We don't use LayerNorm in these blocks as this would inject inputs without taking into account their weights
+        self.encoder_blocks = [FCBlock(num_layers=num_layers_enc, layer_width=layer_width_enc, dropout=dropout,
+                                             size_in=size_in + embedding_dim * embedding_num, size_out=layer_width_enc)]
+        self.encoder_blocks += [FCBlock(num_layers=num_layers_enc, layer_width=layer_width_enc, dropout=dropout,
+                                              size_in=layer_width_enc, size_out=layer_width_enc) for _ in range(num_blocks_enc - 1)]
+
+        if layer_norm:
+            self.stage_blocks = [FCBlockNorm(num_layers=num_layers_stage, layer_width=layer_width_stage, dropout=dropout,
+                                                size_in=layer_width_enc, size_out=size_out, eps=eps)] + \
+                                 [FCBlockNorm(num_layers=num_layers_stage, layer_width=layer_width_stage, dropout=dropout,
+                                                size_in=layer_width_stage, size_out=size_out, eps=eps) for _ in range(num_blocks_stage - 1)]
+        else:
+            self.stage_blocks = [FCBlock(num_layers=num_layers_stage, layer_width=layer_width_stage,
+                                              dropout=dropout, size_in=layer_width_enc, size_out=size_out)] + \
+                                 [FCBlock(num_layers=num_layers_stage, layer_width=layer_width_stage,
+                                              dropout=dropout, size_in=layer_width_stage, size_out=size_out) for _ in range(num_blocks_stage - 1)]
+
+        self.model = t.nn.ModuleList(self.encoder_blocks + self.stage_blocks + self.embeddings)
+        
+        self.loss_fn = nn.CrossEntropyLoss()
+        self.prediction = []
+        self.loss_array = []
+
+        # The alpha values sum to 1 and are equal at the beginning of the training.
+        self.alpha = Parameter(
+            torch.Tensor(self.max_num_hidden_layers).fill_(1 / (self.max_num_hidden_layers)), requires_grad=False
+        ).to(self.device)
+        
+        self.loss_fn = nn.CrossEntropyLoss()
+        self.prediction = []
+        self.loss_array = []
+        self.alpha_array = []
+        self.layerwise_loss_array = []
+        self.hidden_preds = []
+
+    def encode(self, x: t.Tensor, weights: t.Tensor, *args) -> t.Tensor:
+        """
+        x the continuous input : BxF
+        e the categorical inputs BxC
+        """
+
+        self.hidden_preds = []
+        weights_sum = weights.sum(dim=1, keepdim=True)
+        # weights_sum[weights_sum == 0.0] = 1
+
+        ee = [x.unsqueeze(-1)]
+        for i, v in enumerate(args):
+            ee.append(self.embeddings[i](v).unsqueeze(0))
+        # print(ee)
+        # print(ee[0].shape)
+        # print(ee[-1].shape)
+        # exit()
+        backcast = torch.cat(ee, dim=-1)
+        backcast = backcast.reshape(backcast.shape[0], x.shape[1], -1)
+
+        encoding = 0.0
+        for i, block in enumerate(self.encoder_blocks):
+            backcast, e = block(backcast)
+            encoding = encoding + e
+
+            # weighted average
+            # print(encoding.shape)
+            # print(weights.shape)
+            prototype = (encoding * weights).sum(dim=1, keepdim=True) / weights_sum
+
+            backcast = backcast - prototype / (i + 1.0)
+            backcast = t.relu(backcast)
+            self.hidden_preds.append(F.softmax(self.output_layers[i](prototype.squeeze(1)), dim=1))
+
+        # full_embedding = (encoding).sum(dim=1, keepdim=True)
+        # full_embedding = full_embedding.squeeze(1)
+        full_embedding = (encoding * weights).sum(dim=1, keepdim=True) / weights_sum
+        # print(full_embedding.shape)
+        full_embedding = full_embedding.squeeze(1)
+        # full_embedding = encoding#.squeeze(1)
+        return full_embedding
+
+
+        # Initialize the gradients of all the parameters with 0.
+    def zero_grad(self):
+        for i in range(self.max_num_hidden_layers):
+            self.output_layers[i].weight.grad.data.fill_(0)
+            self.output_layers[i].bias.grad.data.fill_(0)
+            self.model[i][-1].weight.grad.data.fill_(0)
+            self.model[i][-1].weight.grad.data.fill_(0)
+
+
+    def decode(self, full_embedding: t.Tensor) -> Tuple[t.Tensor, t.Tensor]:
+        backcast = full_embedding
+        stage_forecast = 0.0
+        for i, block in enumerate(self.stage_blocks):
+            backcast, f = block(backcast)
+            stage_forecast = stage_forecast + f
+            # print(stage_forecast.shape)
+            # print(backcast.shape)
+            # exit()
+            # hid_out = self.hidden_layers[i+len(self.encoder_blocks)](backcast)
+            # self.hidden_preds.append(F.softmax(self.output_layers[i+len(self.encoder_blocks)](hid_out), dim=1))
+            self.hidden_preds.append(F.softmax(self.output_layers[i+len(self.encoder_blocks)](backcast), dim=1))
+        pred_per_layer = torch.stack(self.hidden_preds)
+        return pred_per_layer
+
+    def forward(self, x: t.Tensor, *args) -> Tuple[t.Tensor, t.Tensor]:
+        """
+        x the continuous input : BxF
+        e the categorical inputs BxC
+        """
+       
+        X = t.from_numpy(x).float()
+        # aux_feat = args[0]
+        # aux_mask = args[1]
+        aux_feat = t.from_numpy(args[0]).float()
+        aux_mask = t.from_numpy(args[1]).float()
+        x = t.cat([X, aux_feat[aux_mask==1].unsqueeze(0)], axis=1)
+        # print(X, aux_mask, aux_feat, x)
+        # INSERT AUGMENTATIONS HERE
+        weights = torch.cat([torch.ones_like(X), aux_mask], axis=1)
+        ids = torch.nonzero(weights[0]).reshape(-1)
+        full_embedding = self.encode(x, weights, ids)
+        predictions_per_layer = self.decode(full_embedding)    
+        return torch.sum(torch.mul(self.alpha.view(self.max_num_hidden_layers, 1).repeat(1, self.batch_size).view(self.max_num_hidden_layers, self.batch_size, 1),
+                predictions_per_layer), 0), predictions_per_layer
+    
+
+    def validate_input_X(self, data):
+        if len(data.shape) != 2:
+            raise Exception(
+                "Wrong dimension for this X data. It should have only two dimensions."
+            )
+
+    def validate_input_Y(self, data):
+        if len(data.shape) != 1:
+            raise Exception(
+                "Wrong dimension for this Y data. It should have only one dimensions."
+            )
+
+    def update_weights(self, X_data, aux_data, aux_mask, Y_data, show_loss=False):
+        optimizer = optim.SGD(self.parameters(), lr=self.n)
+        optimizer.zero_grad()
+        Y = torch.from_numpy(Y_data).to(self.device)
+
+        out, predictions_per_layer = self.forward(X_data, aux_data, aux_mask)
+        self.prediction = [out]
+
+        criterion = nn.CrossEntropyLoss().to(self.device)
+        loss = criterion(
+            out.view(self.batch_size, self.n_classes),
+            Y.long(),
+        )
+        self.loss_array = [loss.item()]
+
+        if show_loss:
+            if (len(self.loss_array) % 1000) == 0:
+                print(
+                    "WARNING: Set 'show_loss' to 'False' when not debugging. "
+                    "It will deteriorate the fitting performance."
+                )
+                loss = np.mean(self.loss_array[-1000:])
+                print("Alpha:" + str(self.alpha.data.cpu().numpy()))
+                print("Training Loss: " + str(loss))
+
+        losses_per_layer = []
+
+        for o in predictions_per_layer:
+            criterion = nn.CrossEntropyLoss().to(self.device)
+            loss = criterion(
+                o.view(self.batch_size, self.n_classes),
+                Y.long(),
+            )
+            losses_per_layer.append(loss)
+        total_loss = torch.dot(self.alpha, torch.stack(losses_per_layer))
+        total_loss.backward()
+        optimizer.step()
+        
+        # w = [None] * (len(losses_per_layer))
+        # b = [None] * (len(losses_per_layer))
+
+        # with torch.no_grad():
+
+        #     for i in range(len(losses_per_layer)):
+        #         losses_per_layer[i].backward(retain_graph=True)
+
+        #         self.output_layers[i].weight.data -= (
+        #             self.n * self.alpha[i] * self.output_layers[i].weight.grad.data
+        #         )
+        #         self.output_layers[i].bias.data -= (
+        #             self.n * self.alpha[i] * self.output_layers[i].bias.grad.data
+        #         )
+
+        #         if i < self.max_num_hidden_layers:
+        #             for j in range(i):
+        #                 if w[j] is None:
+        #                     w[j] = (
+        #                         self.alpha[i] * self.model[j][-1].weight.grad.data
+        #                     )
+        #                     b[j] = self.alpha[i] * self.model[j][-1].weight.grad.data
+        #                 else:
+        #                     w[j] += (
+        #                         self.alpha[i] * self.model[j][-1].weight.grad.data
+        #                     )
+        #                     b[j] += self.alpha[i] * self.model[j][-1].weight.grad.data
+
+        #         self.zero_grad()
+
+            # for i in range(self.max_num_hidden_layers):
+            #     self.model[i][-1].weight.grad.data -= self.n * w[i]
+            #     self.model[i][-1].weight.grad.data -= self.n * b[i]
+        with torch.no_grad():
+            for i in range(len(losses_per_layer)):
+                self.alpha[i] *= torch.pow(self.b, losses_per_layer[i])
+                self.alpha[i] = torch.max(
+                    self.alpha[i], self.s / (len(losses_per_layer))
+                )
+    
+        z_t = torch.sum(self.alpha)
+        self.alpha = Parameter(self.alpha / z_t, requires_grad=False).to(self.device)
+
+        # # To save the loss
+        # detached_loss = []
+        # for i in range(len(losses_per_layer)):
+        #     detached_loss.append(losses_per_layer[i].detach().numpy())
+        # self.layerwise_loss_array.append(np.asarray(detached_loss))
+        self.alpha_array = [self.alpha.detach().numpy()]
+        self.hidden_preds = []
+
+        # optimizer = optim.SGD(self.parameters(), lr=self.n)
+        # optimizer.zero_grad()
+        # y_pred = self.forward(X_data, aux_data, aux_mask)
+        # self.prediction.append(y_pred)
+        # loss = self.loss_fn(y_pred, torch.tensor(Y_data, dtype=torch.long))
+        # self.loss_array.append(loss.item())
+        # loss.backward()
+        # optimizer.step()
+
+        # if show_loss:
+        #     print("Loss is: ", loss)
+        # print(len(self.prediction), len(self.loss_array), len(self.alpha_array), len(self.layerwise_loss_array), len(self.hidden_preds))
+
+    def partial_fit(self, X_data, aux_data, aux_mask, Y_data, show_loss=False):
+        self.validate_input_X(X_data)
+        self.validate_input_X(aux_data)
+        self.validate_input_Y(Y_data)
+        self.update_weights(X_data, aux_data, aux_mask, Y_data)
 
 class SetSingleStageResidualNet(t.nn.Module):
     """
@@ -22,7 +311,7 @@ class SetSingleStageResidualNet(t.nn.Module):
                  num_blocks_enc: int, num_layers_enc: int, layer_width_enc,
                  num_blocks_stage: int, num_layers_stage: int, layer_width_stage: int,
                  dropout: float, size_in: int, size_out: int,
-                 embedding_dim: int = 1, embedding_size: int = 50, embedding_num: int = 1, layer_norm: bool = True, eps: float = 1e-6, lr=1e-3):
+                 embedding_dim: int = 10, embedding_size: int = 50, embedding_num: int = 1, layer_norm: bool = True, eps: float = 1e-6, lr=1e-3):
         super().__init__()
 
         self.layer_width_enc = layer_width_enc
@@ -70,10 +359,13 @@ class SetSingleStageResidualNet(t.nn.Module):
         weights_sum = weights.sum(dim=1, keepdim=True)
         # weights_sum[weights_sum == 0.0] = 1
 
-        ee = [x]
+        ee = [x.unsqueeze(-1)]
         for i, v in enumerate(args):
-            ee.append(self.embeddings[i](v).T)
-
+            ee.append(self.embeddings[i](v).unsqueeze(0))
+        # print(ee)
+        # print(ee[0].shape)
+        # print(ee[-1].shape)
+        # exit()
         backcast = torch.cat(ee, dim=-1)
         backcast = backcast.reshape(backcast.shape[0], x.shape[1], -1)
 
@@ -82,7 +374,6 @@ class SetSingleStageResidualNet(t.nn.Module):
             backcast, e = block(backcast)
             encoding = encoding + e
 
-            # prototype = (encoding).sum(dim=1, keepdim=True)
             # weighted average
             # print(encoding.shape)
             # print(weights.shape)
