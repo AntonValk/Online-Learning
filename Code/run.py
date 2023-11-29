@@ -26,7 +26,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 # Data description
 # "german", "svmguide3", "magic04", "a8a", "ItalyPowerDemand", "SUSY", "HIGGS"
-data_name = "SUSY"
+data_name = "magic04"
 
 # Choose the type of data unavailability
 # type can be - "variable_p", "trapezoidal", "obsolete_sudden"
@@ -50,7 +50,7 @@ model_to_run = "ODLSetSingleStageResidualNet"
 
 # Values to change
 n = 0.01
-aux_feat_prob = 0.5
+aux_feat_prob = 0.75
 dropout_p = 0.3
 max_num_hidden_layers = 11
 qtd_neuron_per_hidden_layer = 50
@@ -61,7 +61,7 @@ batch_size = 1
 b = 0.99
 s = 0.2
 use_cuda = False
-number_of_experiments = 5
+number_of_experiments = 20
 
 error_list = []
 loss_list = []
@@ -191,10 +191,10 @@ def run_trial(ex):
         model = ODLSetSingleStageResidualNet(
                 num_blocks_enc=2,
                 num_layers_enc=2,
-                layer_width_enc=24,
+                layer_width_enc=100,
                 num_blocks_stage=2, 
                 num_layers_stage=2, 
-                layer_width_stage=24,
+                layer_width_stage=100,
                 size_in=1,
                 size_out=n_classes,
                 dropout=dropout_p,

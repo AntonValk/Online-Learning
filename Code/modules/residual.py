@@ -66,14 +66,14 @@ class ODLSetSingleStageResidualNet(t.nn.Module):
 
         if layer_norm:
             self.stage_blocks = [FCBlockNorm(num_layers=num_layers_stage, layer_width=layer_width_stage, dropout=dropout,
-                                                size_in=layer_width_enc, size_out=size_out, eps=eps)] + \
+                                                size_in=layer_width_enc, size_out=layer_width_stage, eps=eps)] + \
                                  [FCBlockNorm(num_layers=num_layers_stage, layer_width=layer_width_stage, dropout=dropout,
-                                                size_in=layer_width_stage, size_out=size_out, eps=eps) for _ in range(num_blocks_stage - 1)]
+                                                size_in=layer_width_stage, size_out=layer_width_stage, eps=eps) for _ in range(num_blocks_stage - 1)]
         else:
             self.stage_blocks = [FCBlock(num_layers=num_layers_stage, layer_width=layer_width_stage,
-                                              dropout=dropout, size_in=layer_width_enc, size_out=size_out)] + \
+                                              dropout=dropout, size_in=layer_width_enc, size_out=layer_width_stage)] + \
                                  [FCBlock(num_layers=num_layers_stage, layer_width=layer_width_stage,
-                                              dropout=dropout, size_in=layer_width_stage, size_out=size_out) for _ in range(num_blocks_stage - 1)]
+                                              dropout=dropout, size_in=layer_width_stage, size_out=layer_width_stage) for _ in range(num_blocks_stage - 1)]
 
         self.model = t.nn.ModuleList(self.encoder_blocks + self.stage_blocks + self.embeddings)
         
@@ -101,7 +101,8 @@ class ODLSetSingleStageResidualNet(t.nn.Module):
 
         self.hidden_preds = []
         weights_sum = weights.sum(dim=1, keepdim=True)
-        # weights_sum[weights_sum == 0.0] = 1
+        weights_sum[weights_sum == 0.0] = 1
+        weights = weights.unsqueeze(-1)
 
         ee = [x.unsqueeze(-1)]
         for i, v in enumerate(args):
@@ -121,6 +122,7 @@ class ODLSetSingleStageResidualNet(t.nn.Module):
             # weighted average
             # print(encoding.shape)
             # print(weights.shape)
+            # exit()
             prototype = (encoding * weights).sum(dim=1, keepdim=True) / weights_sum
 
             backcast = backcast - prototype / (i + 1.0)
@@ -156,7 +158,9 @@ class ODLSetSingleStageResidualNet(t.nn.Module):
             # exit()
             # hid_out = self.hidden_layers[i+len(self.encoder_blocks)](backcast)
             # self.hidden_preds.append(F.softmax(self.output_layers[i+len(self.encoder_blocks)](hid_out), dim=1))
-            self.hidden_preds.append(F.softmax(self.output_layers[i+len(self.encoder_blocks)](backcast), dim=1))
+            # print(stage_forecast.shape)
+            # exit()
+            self.hidden_preds.append(F.softmax(self.output_layers[i+len(self.encoder_blocks)](stage_forecast), dim=1))
         pred_per_layer = torch.stack(self.hidden_preds)
         return pred_per_layer
 
@@ -172,10 +176,16 @@ class ODLSetSingleStageResidualNet(t.nn.Module):
         aux_feat = t.from_numpy(args[0]).float()
         aux_mask = t.from_numpy(args[1]).float()
         x = t.cat([X, aux_feat[aux_mask==1].unsqueeze(0)], axis=1)
+        weights = t.ones(X.shape[1]+t.sum(aux_mask, dtype=int).item()).unsqueeze(0)
         # print(X, aux_mask, aux_feat, x)
         # INSERT AUGMENTATIONS HERE
-        weights = torch.cat([torch.ones_like(X), aux_mask], axis=1)
-        ids = torch.nonzero(weights[0]).reshape(-1)
+        ids = torch.cat([torch.arange(X.shape[1]), torch.nonzero(aux_mask[0]).reshape(-1)+ X.shape[1]])
+        # print(aux_mask)
+        # print(aux_mask)
+        # print(x, weights, ids)
+        # print(x.shape)
+        # print(weights.shape)
+        # print(ids.shape)
         full_embedding = self.encode(x, weights, ids)
         predictions_per_layer = self.decode(full_embedding)    
         return torch.sum(torch.mul(self.alpha.view(self.max_num_hidden_layers, 1).repeat(1, self.batch_size).view(self.max_num_hidden_layers, self.batch_size, 1),
