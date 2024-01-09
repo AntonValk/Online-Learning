@@ -18,7 +18,7 @@ from AuxDrop import (
     AuxDrop_ODL_RandomInAuxLayer,
     AuxDrop_ODL_RandomInFirstLayer_AllFeatToFirst,
 )
-from dataset import dataset
+from datasets2 import dataset
 from joblib import Parallel, delayed
 from modules.residual import SingleStageResidualNet, SingleStageResidualNetODL, Fast_AuxDrop_ODL, SetSingleStageResidualNet, ODLSetSingleStageResidualNet
 
@@ -26,7 +26,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 # Data description
 # "german", "svmguide3", "magic04", "a8a", "ItalyPowerDemand", "SUSY", "HIGGS"
-data_name = "magic04"
+data_name = "svmguide3"
 
 # Choose the type of data unavailability
 # type can be - "variable_p", "trapezoidal", "obsolete_sudden"
@@ -61,7 +61,7 @@ batch_size = 1
 b = 0.99
 s = 0.2
 use_cuda = False
-number_of_experiments = 20
+number_of_experiments = 1
 
 error_list = []
 loss_list = []

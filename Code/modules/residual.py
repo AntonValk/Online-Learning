@@ -17,7 +17,7 @@ class ODLSetSingleStageResidualNet(t.nn.Module):
     """
 
     def __init__(self,
-                 num_blocks_enc: int, num_layers_enc: int, layer_width_enc,
+                 num_blocks_enc: int, num_layers_enc: int, layer_width_enc: int,
                  num_blocks_stage: int, num_layers_stage: int, layer_width_stage: int,
                  dropout: float, size_in: int, size_out: int,
                  embedding_dim: int = 10, embedding_size: int = 50, embedding_num: int = 1, layer_norm: bool = True, eps: float = 1e-6, lr=1e-3,
@@ -163,18 +163,53 @@ class ODLSetSingleStageResidualNet(t.nn.Module):
             self.hidden_preds.append(F.softmax(self.output_layers[i+len(self.encoder_blocks)](stage_forecast), dim=1))
         pred_per_layer = torch.stack(self.hidden_preds)
         return pred_per_layer
+    
+    def update_alpha(self, predictions_per_layer, Y):
+        losses_per_layer = []
+
+        for o in predictions_per_layer:
+            criterion = nn.CrossEntropyLoss().to(self.device)
+            loss = criterion(
+                o.view(self.batch_size, self.n_classes),
+                Y.long(),
+            )
+            losses_per_layer.append(loss)
+        with torch.no_grad():
+            for i in range(len(losses_per_layer)):
+                self.alpha[i] *= torch.pow(self.b, losses_per_layer[i])
+                self.alpha[i] = torch.max(
+                    self.alpha[i], self.s / (len(losses_per_layer))
+                )
+    
+        z_t = torch.sum(self.alpha)
+        self.alpha = Parameter(self.alpha / z_t, requires_grad=False).to(self.device)
+
+        # # To save the loss
+        # detached_loss = []
+        # for i in range(len(losses_per_layer)):
+        #     detached_loss.append(losses_per_layer[i].detach().numpy())
+        # self.layerwise_loss_array.append(np.asarray(detached_loss))
+        self.alpha_array = [self.alpha.detach()]
 
     def forward(self, x: t.Tensor, *args) -> Tuple[t.Tensor, t.Tensor]:
         """
         x the continuous input : BxF
         e the categorical inputs BxC
         """
-       
-        X = t.from_numpy(x).float()
+        # print(x.keys())
+        X = x['X_base']
+        aux_feat = x['X_aux_new']
+        aux_mask = x['aux_mask']
+        Y = x['Y']
+        # print(aux_feat)
+        # print(aux_new)
+        # print(aux_mask)
+        # exit()
+        # X = t.from_numpy(x).float()
         # aux_feat = args[0]
         # aux_mask = args[1]
-        aux_feat = t.from_numpy(args[0]).float()
-        aux_mask = t.from_numpy(args[1]).float()
+        # aux_feat = t.from_numpy(args[0]).float()
+        # aux_mask = t.from_numpy(args[1]).float()
         x = t.cat([X, aux_feat[aux_mask==1].unsqueeze(0)], axis=1)
         weights = t.ones(X.shape[1]+t.sum(aux_mask, dtype=int).item()).unsqueeze(0)
         # print(X, aux_mask, aux_feat, x)
@@ -188,8 +223,9 @@ class ODLSetSingleStageResidualNet(t.nn.Module):
         # print(ids.shape)
         full_embedding = self.encode(x, weights, ids)
         predictions_per_layer = self.decode(full_embedding)    
+        self.update_alpha(predictions_per_layer, Y)
         return torch.sum(torch.mul(self.alpha.view(self.max_num_hidden_layers, 1).repeat(1, self.batch_size).view(self.max_num_hidden_layers, self.batch_size, 1),
-                predictions_per_layer), 0), predictions_per_layer
+                predictions_per_layer), 0), predictions_per_layer, self.alpha_array
     
 
     def validate_input_X(self, data):
