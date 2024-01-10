@@ -122,7 +122,7 @@ class GermanDataModule(pl.LightningDataModule):
                  name: str = 'german',
                  task_type: str = "variable_p",
                  aux_feat_prob: float = 0.5,
-                 num_workers: int = 5,
+                 num_workers: int = -1,
                  persistent_workers: bool = True,
                  use_cuda: bool = True,
                  batch_size: int = 1,
@@ -150,7 +150,8 @@ class GermanDataModule(pl.LightningDataModule):
         return DataLoader(self.dataset, batch_size=self.batch_size, 
                           shuffle=True, pin_memory=True, 
                           persistent_workers=self.persistent_workers,
-                          num_workers=self.num_workers, collate_fn=collate_fn_flat_deal)
+                          num_workers=self.num_workers, collate_fn=collate_fn_flat_deal,
+                          multiprocessing_context='fork')
 
 
 class SvmGuideDataset(Dataset):
@@ -228,7 +229,7 @@ class SvmGuideDataModule(pl.LightningDataModule):
                  name: str = 'svmguid3',
                  task_type: str = "variable_p",
                  aux_feat_prob: float = 0.5,
-                 num_workers: int = 5,
+                 num_workers: int = -1,
                  persistent_workers: bool = True,
                  use_cuda: bool = True,
                  batch_size: int = 1,
@@ -256,4 +257,6 @@ class SvmGuideDataModule(pl.LightningDataModule):
         return DataLoader(self.dataset, batch_size=self.batch_size, 
                           shuffle=True, pin_memory=True, 
                           persistent_workers=self.persistent_workers,
-                          num_workers=self.num_workers, collate_fn=collate_fn_flat_deal)
+                          num_workers=self.num_workers, collate_fn=collate_fn_flat_deal,
+                          multiprocessing_context='fork')
+    

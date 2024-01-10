@@ -12,6 +12,8 @@ import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 
+from joblib import Parallel, delayed
+
 # from utils.checkpointing import get_checkpoint_path
 from utils.model_factory import instantiate
 # from hydra.utils import instantiate
@@ -62,8 +64,11 @@ def main(config_path: str, overrides: list = []):
     
     param_grid = ParameterGrid(cfg_yaml)
     #  TODO: wrap in jobslib and parallelize
-    for param_set in param_grid:
-        run(param_set)
+    # print(len(param_grid))
+    Parallel(n_jobs=min(len(param_grid), os.cpu_count()))(
+    delayed(run)(param_set) for param_set in param_grid)
+    # for param_set in param_grid:
+    #     run(param_set)
     
 
 
