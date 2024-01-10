@@ -26,7 +26,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 # Data description
 # "german", "svmguide3", "magic04", "a8a", "ItalyPowerDemand", "SUSY", "HIGGS"
-data_name = "svmguide3"
+data_name = "german"
 
 # Choose the type of data unavailability
 # type can be - "variable_p", "trapezoidal", "obsolete_sudden"
@@ -40,13 +40,13 @@ type = "variable_p"
 #  "AuxDrop_ODL_RandomInAuxLayer" - On ODL framework, Random Dropout applied in the AuxLayer
 # "AuxDrop_ODL_RandomInFirstLayer_AllFeatToFirst" - On ODL framework, Random Dropout applied in the first layer and all the features (base + auxiliary) are passed to the first layer
 
-# model_to_run = "AuxDrop_ODL"
+model_to_run = "AuxDrop_ODL"
 # model_to_run = "AuxDrop_OGD"
 # model_to_run = "ResidualSingleStage"
 # model_to_run = "ResidualSingleStage_ODL"
 # model_to_run = "Fast_AuxDrop_ODL"
 # model_to_run = "SetSingleStageResidualNet"
-model_to_run = "ODLSetSingleStageResidualNet"
+# model_to_run = "ODLSetSingleStageResidualNet"
 
 # Values to change
 n = 0.01
@@ -77,6 +77,8 @@ def run_trial(ex):
     n_base_feat, n_aux_feat, X_base, X_aux, X_aux_new, aux_mask, Y, label = dataset(
         data_name, type=type, aux_feat_prob=aux_feat_prob, use_cuda=use_cuda, seed=seed
     )
+    # print(n_base_feat, n_aux_feat)
+    # exit()
     # Note: X_aux_new contains the auxiliary data with some data unavailable.
     # X_aux contains the auxiliary features with all the data (even the unavailable ones)
 

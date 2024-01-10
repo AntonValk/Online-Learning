@@ -8,7 +8,8 @@ dataset.persistent_workers: True
 dataset.batch_size: 1
 # dataset.eval_batch_size: 128
 
-random.seed: !!python/tuple [0,1,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]
+# random.seed: !!python/tuple [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]
+random.seed: !!python/tuple [0,1,2,3,4]
 # random.seed: 0
 
 trainer.max_epochs: 1
@@ -41,3 +42,4 @@ model.scheduler.warmup_updates: 150
 model.scheduler.warmup_end_lr: "${model.optimizer.lr}"
 
 # python run.py --config=config/proto_two_stage_ODL.yaml
+# taskset -c "0-4" python run_hydra.py --config=config/proto_two_stage_ODL.yaml

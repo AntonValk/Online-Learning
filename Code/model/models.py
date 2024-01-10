@@ -6,12 +6,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch
 
-# from hydra.utils import instantiate
 from utils.model_factory import instantiate
-
-# from torchmetrics import Accuracy
 from metrics import CumulativeError, NormalizedCumulativeError, SmoothedCumulativeError
-
 from modules import ODLSetSingleStageResidualNet
     
     
@@ -25,7 +21,6 @@ class OnlineLearner(pl.LightningModule):
         self.loss = instantiate(cfg.model.loss)
         
     def init_metrics(self):
-        # self.train_acc = Accuracy(task="binary")
         self.train_norm_err = NormalizedCumulativeError()
         self.train_exp_err = SmoothedCumulativeError()
         self.train_err = CumulativeError()
