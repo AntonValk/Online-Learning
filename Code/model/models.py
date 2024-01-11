@@ -61,11 +61,11 @@ class OnlineLearner(pl.LightningModule):
         
         return loss
     
-    def validation_step(self, batch, batch_idx):
-        pass
+    # def validation_step(self, batch, batch_idx):
+    #     pass
         
-    def test_step(self, batch, batch_idx):
-        pass
+    # def test_step(self, batch, batch_idx):
+    #     pass
 
     def configure_optimizers(self):
         optimizer = instantiate(self.cfg.model.optimizer, self.parameters())

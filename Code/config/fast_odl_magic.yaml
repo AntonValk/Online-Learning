@@ -1,8 +1,8 @@
 logging.path: "./lightning_logs/new/${dataset.name}"
 logging.name: "model=${model._target_}-backbone=${model.nn.backbone._target_}-lr=${model.optimizer.lr}-width=${model.nn.backbone.d_model}-loss=${model.loss._target_}-seed=${random.seed}"
 
-dataset._target_: dataset.GermanDataModule
-dataset.name: "german"
+dataset._target_: dataset.Magic04DataModule
+dataset.name: "magic04"
 dataset.num_workers: 1
 dataset.persistent_workers: True
 dataset.batch_size: 1
@@ -20,7 +20,7 @@ model.loss._target_: torch.nn.CrossEntropyLoss
 
 model.nn.backbone._target_: modules.Fast_AuxDrop_ODL
 model.nn.backbone.features_size: 2
-model.nn.backbone.n_aux_feat: 22
+model.nn.backbone.n_aux_feat: 8
 model.nn.backbone.max_num_hidden_layers: 6
 model.nn.backbone.qtd_neuron_per_hidden_layer: 50
 model.nn.backbone.n_classes: 2
