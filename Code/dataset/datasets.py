@@ -124,7 +124,7 @@ class GermanDataModule(pl.LightningDataModule):
                  aux_feat_prob: float = 0.73,
                  num_workers: int = -1,
                  persistent_workers: bool = True,
-                 use_cuda: bool = True,
+                 use_cuda: bool = False,
                  batch_size: int = 1,
                  seed: int = 0
                 ):

@@ -201,11 +201,26 @@ class ODLSetSingleStageResidualNet(t.nn.Module):
         aux_feat = x['X_aux_new']
         aux_mask = x['aux_mask']
         Y = x['Y']
+        # print(aux_feat)
+        # print(aux_new)
+        # print(aux_mask)
+        # exit()
+        # X = t.from_numpy(x).float()
+        # aux_feat = args[0]
+        # aux_mask = args[1]
+        # aux_feat = t.from_numpy(args[0]).float()
+        # aux_mask = t.from_numpy(args[1]).float()
         x = t.cat([X, aux_feat[aux_mask==1].unsqueeze(0)], axis=1)
         weights = t.ones(X.shape[1]+t.sum(aux_mask, dtype=int).item()).unsqueeze(0)
         # print(X, aux_mask, aux_feat, x)
         # INSERT AUGMENTATIONS HERE
         ids = torch.cat([torch.arange(X.shape[1]), torch.nonzero(aux_mask[0]).reshape(-1)+ X.shape[1]])
+        # print(aux_mask)
+        # print(aux_mask)
+        # print(x, weights, ids)
+        # print(x.shape)
+        # print(weights.shape)
+        # print(ids.shape)
         full_embedding = self.encode(x, weights, ids)
         predictions_per_layer = self.decode(full_embedding)    
         self.update_alpha(predictions_per_layer, Y)
@@ -225,7 +240,113 @@ class ODLSetSingleStageResidualNet(t.nn.Module):
                 "Wrong dimension for this Y data. It should have only one dimensions."
             )
 
+    def update_weights(self, X_data, aux_data, aux_mask, Y_data, show_loss=False):
+        optimizer = optim.SGD(self.parameters(), lr=self.n)
+        optimizer.zero_grad()
+        Y = torch.from_numpy(Y_data).to(self.device)
 
+        out, predictions_per_layer = self.forward(X_data, aux_data, aux_mask)
+        self.prediction = [out]
+
+        criterion = nn.CrossEntropyLoss().to(self.device)
+        loss = criterion(
+            out.view(self.batch_size, self.n_classes),
+            Y.long(),
+        )
+        self.loss_array = [loss.item()]
+
+        if show_loss:
+            if (len(self.loss_array) % 1000) == 0:
+                print(
+                    "WARNING: Set 'show_loss' to 'False' when not debugging. "
+                    "It will deteriorate the fitting performance."
+                )
+                loss = np.mean(self.loss_array[-1000:])
+                print("Alpha:" + str(self.alpha.data.cpu().numpy()))
+                print("Training Loss: " + str(loss))
+
+        losses_per_layer = []
+
+        for o in predictions_per_layer:
+            criterion = nn.CrossEntropyLoss().to(self.device)
+            loss = criterion(
+                o.view(self.batch_size, self.n_classes),
+                Y.long(),
+            )
+            losses_per_layer.append(loss)
+        total_loss = torch.dot(self.alpha, torch.stack(losses_per_layer))
+        total_loss.backward()
+        optimizer.step()
+        
+        # w = [None] * (len(losses_per_layer))
+        # b = [None] * (len(losses_per_layer))
+
+        # with torch.no_grad():
+
+        #     for i in range(len(losses_per_layer)):
+        #         losses_per_layer[i].backward(retain_graph=True)
+
+        #         self.output_layers[i].weight.data -= (
+        #             self.n * self.alpha[i] * self.output_layers[i].weight.grad.data
+        #         )
+        #         self.output_layers[i].bias.data -= (
+        #             self.n * self.alpha[i] * self.output_layers[i].bias.grad.data
+        #         )
+
+        #         if i < self.max_num_hidden_layers:
+        #             for j in range(i):
+        #                 if w[j] is None:
+        #                     w[j] = (
+        #                         self.alpha[i] * self.model[j][-1].weight.grad.data
+        #                     )
+        #                     b[j] = self.alpha[i] * self.model[j][-1].weight.grad.data
+        #                 else:
+        #                     w[j] += (
+        #                         self.alpha[i] * self.model[j][-1].weight.grad.data
+        #                     )
+        #                     b[j] += self.alpha[i] * self.model[j][-1].weight.grad.data
+
+        #         self.zero_grad()
+
+            # for i in range(self.max_num_hidden_layers):
+            #     self.model[i][-1].weight.grad.data -= self.n * w[i]
+            #     self.model[i][-1].weight.grad.data -= self.n * b[i]
+        with torch.no_grad():
+            for i in range(len(losses_per_layer)):
+                self.alpha[i] *= torch.pow(self.b, losses_per_layer[i])
+                self.alpha[i] = torch.max(
+                    self.alpha[i], self.s / (len(losses_per_layer))
+                )
+    
+        z_t = torch.sum(self.alpha)
+        self.alpha = Parameter(self.alpha / z_t, requires_grad=False).to(self.device)
+
+        # # To save the loss
+        # detached_loss = []
+        # for i in range(len(losses_per_layer)):
+        #     detached_loss.append(losses_per_layer[i].detach().numpy())
+        # self.layerwise_loss_array.append(np.asarray(detached_loss))
+        self.alpha_array = [self.alpha.detach().numpy()]
+        self.hidden_preds = []
+
+        # optimizer = optim.SGD(self.parameters(), lr=self.n)
+        # optimizer.zero_grad()
+        # y_pred = self.forward(X_data, aux_data, aux_mask)
+        # self.prediction.append(y_pred)
+        # loss = self.loss_fn(y_pred, torch.tensor(Y_data, dtype=torch.long))
+        # self.loss_array.append(loss.item())
+        # loss.backward()
+        # optimizer.step()
+
+        # if show_loss:
+        #     print("Loss is: ", loss)
+        # print(len(self.prediction), len(self.loss_array), len(self.alpha_array), len(self.layerwise_loss_array), len(self.hidden_preds))
+
+    def partial_fit(self, X_data, aux_data, aux_mask, Y_data, show_loss=False):
+        self.validate_input_X(X_data)
+        self.validate_input_X(aux_data)
+        self.validate_input_Y(Y_data)
+        self.update_weights(X_data, aux_data, aux_mask, Y_data)
 
 class SetSingleStageResidualNet(t.nn.Module):
     """
@@ -1072,57 +1193,16 @@ class Fast_AuxDrop_ODL(nn.Module):
         # self.layerwise_loss_array.append(np.asarray(detached_loss))
         # self.alpha_array.append(self.alpha.detach().numpy())
         self.alpha_array = [self.alpha]
-    
-    def update_alpha(self, predictions_per_layer, Y):
-        losses_per_layer = []
-
-        for o in predictions_per_layer:
-            criterion = nn.CrossEntropyLoss().to(self.device)
-            loss = criterion(
-                o.view(self.batch_size, self.n_classes),
-                Y.long(),
-            )
-            losses_per_layer.append(loss)
-        with torch.no_grad():
-            for i in range(len(losses_per_layer)):
-                self.alpha[i] *= torch.pow(self.b, losses_per_layer[i])
-                self.alpha[i] = torch.max(
-                    self.alpha[i], self.s / (len(losses_per_layer))
-                )
-    
-        z_t = torch.sum(self.alpha)
-        self.alpha = Parameter(self.alpha / z_t, requires_grad=False).to(self.device)
-        # print(self.alpha)
-
-        # # To save the loss
-        # detached_loss = []
-        # for i in range(len(losses_per_layer)):
-        #     detached_loss.append(losses_per_layer[i].detach().numpy())
-        # self.layerwise_loss_array.append(np.asarray(detached_loss))
-        self.alpha_array = [self.alpha.detach()]
 
     # Forward pass. Get the output from each layer.
-    def forward(self, x: t.Tensor, *args):
+    def forward(self, X, aux_feat, aux_mask):
         hidden_connections = []
         linear_x = []
         relu_x = []
 
-        X = x['X_base']
-        aux_feat = x['X_aux_new']
-        aux_mask = x['aux_mask']
-        Y = x['Y']
-
-        # X = t.cat([X, aux_feat*aux_mask], axis=1)
-
-        # print(x.keys())
-        # print(len(aux_feat[0]))
-        # print(X)
-        # print(aux_mask)
-        # exit()
-
-        # X = torch.from_numpy(X).float().to(self.device)
-        # aux_feat = torch.from_numpy(aux_feat).float().to(self.device)
-        # aux_mask = torch.from_numpy(aux_mask).float().to(self.device)
+        X = torch.from_numpy(X).float().to(self.device)
+        aux_feat = torch.from_numpy(aux_feat).float().to(self.device)
+        aux_mask = torch.from_numpy(aux_mask).float().to(self.device)
 
         # Forward pass of the first hidden layer. Apply the linear transformation and then relu. The output from the relu is the input
         # passed to the next layer.
@@ -1133,9 +1213,6 @@ class Fast_AuxDrop_ODL(nn.Module):
         for i in range(1, self.max_num_hidden_layers):
             # Forward pass to the Aux layer.
             if i == self.aux_layer - 1:
-                # print(hidden_connections[i].shape)
-                # print(torch.cat((aux_feat, hidden_connections[i - 1]), dim=1).shape)
-                # exit()
                 # Input to the aux layer will be the output from its previous layer and the incoming auxiliary inputs.
                 linear_x.append(
                     self.hidden_layers[i](
@@ -1175,16 +1252,9 @@ class Fast_AuxDrop_ODL(nn.Module):
                     )
                 )
 
-        predictions_per_layer = torch.stack(output_class)
+        pred_per_layer = torch.stack(output_class)
 
-        # return pred_per_layer
-    
-        self.update_alpha(predictions_per_layer, Y)
-        # print(self.alpha.shape)
-        # print(self.max_num_hidden_layers)
-        # print(predictions_per_layer.shape)
-        return torch.sum(torch.mul(self.alpha.view(self.max_num_hidden_layers-2, 1).repeat(1, self.batch_size).view(self.max_num_hidden_layers-2, self.batch_size, 1),
-                predictions_per_layer), 0), predictions_per_layer, self.alpha_array
+        return pred_per_layer
 
     def validate_input_X(self, data):
         if len(data.shape) != 2:
@@ -1198,8 +1268,8 @@ class Fast_AuxDrop_ODL(nn.Module):
                 "Wrong dimension for this Y data. It should have only one dimensions."
             )
 
-    # def partial_fit(self, X_data, aux_data, aux_mask, Y_data, show_loss=False):
-    #     self.validate_input_X(X_data)
-    #     self.validate_input_X(aux_data)
-    #     self.validate_input_Y(Y_data)
-    #     self.update_weights(X_data, aux_data, aux_mask, Y_data, show_loss)
+    def partial_fit(self, X_data, aux_data, aux_mask, Y_data, show_loss=False):
+        self.validate_input_X(X_data)
+        self.validate_input_X(aux_data)
+        self.validate_input_Y(Y_data)
+        self.update_weights(X_data, aux_data, aux_mask, Y_data, show_loss)

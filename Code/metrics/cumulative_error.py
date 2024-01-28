@@ -9,11 +9,7 @@ class CumulativeError(Metric):
         self.add_state("accumulated", default=torch.FloatTensor([0.0]), dist_reduce_fx="sum")
 
     def update(self, preds: torch.Tensor, target: torch.Tensor):
-        preds = preds.view(-1, 2)
-        target = target.view(-1)
-
         assert preds.shape[0] == target.shape[0]
-
         self.accumulated += int(torch.argmax(preds, axis=1) != target) 
 
     def compute(self):

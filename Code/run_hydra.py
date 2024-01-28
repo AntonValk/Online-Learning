@@ -11,6 +11,7 @@ import torch
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
+from results import summarize_experiments
 
 from joblib import Parallel, delayed
 
@@ -69,6 +70,8 @@ def main(config_path: str, overrides: list = []):
     delayed(run)(param_set) for param_set in param_grid)
     # for param_set in param_grid:
     #     run(param_set)
+    mean, std = summarize_experiments(cfg_yaml['dataset.name'][0])
+    print(f"Finished runs {len(cfg_yaml['random.seed'])} for {cfg_yaml['dataset.name'][0]} with mean {mean} and std {std}.")
     
 
 

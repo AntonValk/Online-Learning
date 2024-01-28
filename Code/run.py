@@ -20,7 +20,9 @@ from AuxDrop import (
 )
 from datasets2 import dataset
 from joblib import Parallel, delayed
-from modules.residual import SingleStageResidualNet, SingleStageResidualNetODL, Fast_AuxDrop_ODL, SetSingleStageResidualNet, ODLSetSingleStageResidualNet
+# from modules.residual import SingleStageResidualNet, SingleStageResidualNetODL, Fast_AuxDrop_ODL, SetSingleStageResidualNet, ODLSetSingleStageResidualNet
+from modules.residual import SingleStageResidualNet, SingleStageResidualNetODL, SetSingleStageResidualNet, ODLSetSingleStageResidualNet
+from modules.old_residual import Fast_AuxDrop_ODL
 
 from torch.utils.tensorboard import SummaryWriter
 
@@ -40,19 +42,19 @@ type = "variable_p"
 #  "AuxDrop_ODL_RandomInAuxLayer" - On ODL framework, Random Dropout applied in the AuxLayer
 # "AuxDrop_ODL_RandomInFirstLayer_AllFeatToFirst" - On ODL framework, Random Dropout applied in the first layer and all the features (base + auxiliary) are passed to the first layer
 
-model_to_run = "AuxDrop_ODL"
+# model_to_run = "AuxDrop_ODL"
 # model_to_run = "AuxDrop_OGD"
 # model_to_run = "ResidualSingleStage"
 # model_to_run = "ResidualSingleStage_ODL"
-# model_to_run = "Fast_AuxDrop_ODL"
+model_to_run = "Fast_AuxDrop_ODL"
 # model_to_run = "SetSingleStageResidualNet"
 # model_to_run = "ODLSetSingleStageResidualNet"
 
 # Values to change
-n = 0.01
-aux_feat_prob = 0.75
+n = 0.1
+aux_feat_prob = 0.73
 dropout_p = 0.3
-max_num_hidden_layers = 11
+max_num_hidden_layers = 6
 qtd_neuron_per_hidden_layer = 50
 n_classes = 2
 aux_layer = 3
@@ -61,7 +63,7 @@ batch_size = 1
 b = 0.99
 s = 0.2
 use_cuda = False
-number_of_experiments = 1
+number_of_experiments = 20
 
 error_list = []
 loss_list = []

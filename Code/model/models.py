@@ -69,8 +69,8 @@ class OnlineLearner(pl.LightningModule):
 
     def configure_optimizers(self):
         optimizer = instantiate(self.cfg.model.optimizer, self.parameters())
-        scheduler = instantiate(self.cfg.model.scheduler, optimizer)
-        if scheduler is not None:
-            optimizer = {"optimizer": optimizer, 
-                         "lr_scheduler": {"scheduler": scheduler, "interval": "step"}}
+        # scheduler = instantiate(self.cfg.model.scheduler, optimizer)
+        # if scheduler is not None:
+        #     optimizer = {"optimizer": optimizer, 
+        #                  "lr_scheduler": {"scheduler": scheduler, "interval": "step"}}
         return optimizer
