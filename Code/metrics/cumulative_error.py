@@ -1,4 +1,5 @@
 from torchmetrics import Metric
+from torchmetrics.aggregation import RunningMean
 import torch
 
 
@@ -15,7 +16,17 @@ class CumulativeError(Metric):
     def compute(self):
         return self.accumulated
 
+class MovingWindowAccuracy(Metric):
+    def __init__(self, dist_sync_on_step=False, window_size=50):
+        super().__init__(dist_sync_on_step=dist_sync_on_step)
+        self.metric = RunningMean(window=window_size)
 
+    def update(self, preds: torch.Tensor, target: torch.Tensor):
+        self.metric(int(torch.argmax(preds, axis=1) == target))
+        
+    def compute(self):
+        return self.metric.compute()
+        
 class NormalizedCumulativeError(Metric):
     def __init__(self, dist_sync_on_step=False):
         super().__init__(dist_sync_on_step=dist_sync_on_step)

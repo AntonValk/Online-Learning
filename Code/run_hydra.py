@@ -64,14 +64,12 @@ def main(config_path: str, overrides: list = []):
     cfg_yaml = {k: list(v) if isinstance(v, tuple) else [v] for k,v in cfg_yaml.items()}
     
     param_grid = ParameterGrid(cfg_yaml)
-    #  TODO: wrap in jobslib and parallelize
-    # print(len(param_grid))
     Parallel(n_jobs=min(len(param_grid), os.cpu_count()))(
     delayed(run)(param_set) for param_set in param_grid)
     # for param_set in param_grid:
     #     run(param_set)
-    mean, std = summarize_experiments(cfg_yaml['dataset.name'][0])
-    print(f"Finished runs {len(cfg_yaml['random.seed'])} for {cfg_yaml['dataset.name'][0]} with mean {mean} and std {std}.")
+    # mean, std = summarize_experiments(cfg_yaml['dataset.name'][0])
+    # print(f"Finished runs {len(cfg_yaml['random.seed'])} for {cfg_yaml['dataset.name'][0]} with mean {mean} and std {std}.")
     
 
 

@@ -1024,7 +1024,7 @@ class Fast_AuxDrop_ODL(nn.Module):
         b=0.99,
         n=0.01,
         s=0.2,
-        dropout_p=0.5,
+        dropout_p=0.3,
         n_aux_feat=3,
         use_cuda=False,
     ):
@@ -1210,6 +1210,7 @@ class Fast_AuxDrop_ODL(nn.Module):
         relu_x.append(F.relu(linear_x[0]))
         hidden_connections.append(relu_x[0])
 
+
         for i in range(1, self.max_num_hidden_layers):
             # Forward pass to the Aux layer.
             if i == self.aux_layer - 1:
@@ -1227,11 +1228,16 @@ class Fast_AuxDrop_ODL(nn.Module):
                     self.p * self.n_neuron_aux_layer
                     - (aux_mask.size()[1] - torch.sum(aux_mask))
                 ) / (self.n_neuron_aux_layer - aux_mask.size()[1])
+                # print(aux_p, self.p)
+                # print("RANDOM STATE", torch.random.get_rng_state())
+                # print(torch.random.initial_seed())
                 binomial = torch.distributions.binomial.Binomial(probs=1 - aux_p)
                 non_aux_mask = binomial.sample(
                     [1, self.n_neuron_aux_layer - aux_mask.size()[1]]
                 )
                 mask = torch.cat((aux_mask, non_aux_mask), dim=1)
+                # print(mask)
+                # print("sum", torch.sum(mask))
                 hidden_connections.append(relu_x[i] * mask * (1.0 / (1 - self.p)))
             else:
                 linear_x.append(self.hidden_layers[i](hidden_connections[i - 1]))

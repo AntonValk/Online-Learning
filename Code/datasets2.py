@@ -160,7 +160,6 @@ def dataset(name = "german", type = "variable_p", aux_feat_prob = 0.5, use_cuda 
         X_base = np.array(data.iloc[:,1:n_base_feat+1])
         X_aux = np.array(data.iloc[:,n_base_feat+1:], dtype = float)
         X_aux_new = np.where(aux_mask, X_aux, 0)
-
         return n_base_feat, n_aux_feat,  X_base, X_aux, X_aux_new, aux_mask, Y, label
 
     if name == "a8a":

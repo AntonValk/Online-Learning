@@ -28,7 +28,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 # Data description
 # "german", "svmguide3", "magic04", "a8a", "ItalyPowerDemand", "SUSY", "HIGGS"
-data_name = "german"
+data_name = "HIGGS"
 
 # Choose the type of data unavailability
 # type can be - "variable_p", "trapezoidal", "obsolete_sudden"
@@ -51,10 +51,10 @@ model_to_run = "Fast_AuxDrop_ODL"
 # model_to_run = "ODLSetSingleStageResidualNet"
 
 # Values to change
-n = 0.1
-aux_feat_prob = 0.73
+n = 0.05
+aux_feat_prob = 0.8
 dropout_p = 0.3
-max_num_hidden_layers = 6
+max_num_hidden_layers = 11
 qtd_neuron_per_hidden_layer = 50
 n_classes = 2
 aux_layer = 3
@@ -63,7 +63,7 @@ batch_size = 1
 b = 0.99
 s = 0.2
 use_cuda = False
-number_of_experiments = 20
+number_of_experiments = 5
 
 error_list = []
 loss_list = []
@@ -282,7 +282,6 @@ def run_trial(ex):
         # print(error)
         # print(cumulative_error_test)
     return trial_stats
-
 
 result = Parallel(n_jobs=min(number_of_experiments, os.cpu_count()))(
     delayed(run_trial)(i) for i in range(number_of_experiments)

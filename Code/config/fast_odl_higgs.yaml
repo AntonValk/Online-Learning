@@ -1,13 +1,13 @@
 
 logging.path: "./lightning_logs/new/${dataset.name}"
-logging.name: "model=${model._target_}-backbone=${model.nn.backbone._target_}-lr=${model.optimizer.lr}-width=${model.nn.backbone.d_model}-loss=${model.loss._target_}-seed=${random.seed}-missingness=${dataset.missingness}"
+logging.name: "model=${model._target_}-backbone=${model.nn.backbone._target_}-lr=${model.optimizer.lr}-width=${model.nn.backbone.d_model}-loss=${model.loss._target_}-seed=${random.seed}-missingness=${dataset.aux_feat_prob}"
 
 dataset._target_: dataset.HiggsDataModule
 dataset.name: "HIGGS"
 dataset.num_workers: 1
 dataset.persistent_workers: True
 dataset.batch_size: 1
-dataset.missingness: 0.5
+dataset.aux_feat_prob: !!python/tuple [0.01,0.05,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,0.95,0.99]
 
 random.seed: !!python/tuple [0,1,2,3,4]
 
@@ -26,7 +26,7 @@ model.nn.backbone.n_aux_feat: 16
 model.nn.backbone.max_num_hidden_layers: 11
 model.nn.backbone.qtd_neuron_per_hidden_layer: 50
 model.nn.backbone.n_classes: 2
-model.nn.backbone.aux_layer: 6
+model.nn.backbone.aux_layer: 3
 model.nn.backbone.n_neuron_aux_layer: 100
 model.nn.backbone.dropout: 0.3
 model.nn.backbone.d_model: 50

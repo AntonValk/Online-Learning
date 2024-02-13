@@ -148,7 +148,7 @@ class GermanDataModule(pl.LightningDataModule):
     
     def train_dataloader(self):
         return DataLoader(self.dataset, batch_size=self.batch_size, 
-                          shuffle=True, pin_memory=True, 
+                          shuffle=False, pin_memory=True, 
                           persistent_workers=self.persistent_workers,
                           num_workers=self.num_workers, collate_fn=collate_fn_flat_deal,
                           multiprocessing_context='fork')
@@ -232,8 +232,8 @@ class SvmGuideDataModule(pl.LightningDataModule):
                  task_type: str = "variable_p",
                  aux_feat_prob: float = 0.72,
                  num_workers: int = -1,
-                 persistent_workers: bool = True,
-                 use_cuda: bool = True,
+                 persistent_workers: bool = False,
+                 use_cuda: bool = False,
                  batch_size: int = 1,
                  seed: int = 0
                 ):
@@ -257,7 +257,7 @@ class SvmGuideDataModule(pl.LightningDataModule):
     
     def train_dataloader(self):
         return DataLoader(self.dataset, batch_size=self.batch_size, 
-                          shuffle=True, pin_memory=True, 
+                          shuffle=False, pin_memory=True, 
                           persistent_workers=self.persistent_workers,
                           num_workers=self.num_workers, collate_fn=collate_fn_flat_deal,
                           multiprocessing_context='fork')
@@ -337,7 +337,7 @@ class Magic04DataModule(pl.LightningDataModule):
                  aux_feat_prob: float = 0.68,
                  num_workers: int = -1,
                  persistent_workers: bool = True,
-                 use_cuda: bool = True,
+                 use_cuda: bool = False,
                  batch_size: int = 1,
                  seed: int = 0
                 ):
@@ -361,7 +361,7 @@ class Magic04DataModule(pl.LightningDataModule):
     
     def train_dataloader(self):
         return DataLoader(self.dataset, batch_size=self.batch_size, 
-                          shuffle=True, pin_memory=True, 
+                          shuffle=False, pin_memory=True, 
                           persistent_workers=self.persistent_workers,
                           num_workers=self.num_workers, collate_fn=collate_fn_flat_deal,
                           multiprocessing_context='fork')
@@ -446,7 +446,7 @@ class a8aDataModule(pl.LightningDataModule):
                  aux_feat_prob: float = 0.75,
                  num_workers: int = -1,
                  persistent_workers: bool = True,
-                 use_cuda: bool = True,
+                 use_cuda: bool = False,
                  batch_size: int = 1,
                  seed: int = 0
                 ):
@@ -470,7 +470,7 @@ class a8aDataModule(pl.LightningDataModule):
     
     def train_dataloader(self):
         return DataLoader(self.dataset, batch_size=self.batch_size, 
-                          shuffle=True, pin_memory=True, 
+                          shuffle=False, pin_memory=True, 
                           persistent_workers=self.persistent_workers,
                           num_workers=self.num_workers, collate_fn=collate_fn_flat_deal,
                           multiprocessing_context='fork')
@@ -548,14 +548,15 @@ class HiggsDataset(Dataset):
     def __len__(self):
         return len(self.Y)
 
+
 class HiggsDataModule(pl.LightningDataModule):
     def __init__(self,
                  name: str = 'HIGGS',
                  task_type: str = "variable_p",
-                 aux_feat_prob: float = 0.5,
-                 num_workers: int = -1,
+                 aux_feat_prob: float = 0,
+                 num_workers: int = 0,
                  persistent_workers: bool = True,
-                 use_cuda: bool = True,
+                 use_cuda: bool = False,
                  batch_size: int = 1,
                  seed: int = 0
                 ):
@@ -579,7 +580,7 @@ class HiggsDataModule(pl.LightningDataModule):
     
     def train_dataloader(self):
         return DataLoader(self.dataset, batch_size=self.batch_size, 
-                          shuffle=True, pin_memory=True, 
+                          shuffle=False, pin_memory=True, 
                           persistent_workers=self.persistent_workers,
                           num_workers=self.num_workers, collate_fn=collate_fn_flat_deal,
                           multiprocessing_context='fork')
@@ -655,10 +656,10 @@ class SusyDataModule(pl.LightningDataModule):
     def __init__(self,
                  name: str = 'SUSY',
                  task_type: str = "variable_p",
-                 aux_feat_prob: float = 0.5,
+                 aux_feat_prob: float = 0,
                  num_workers: int = -1,
                  persistent_workers: bool = True,
-                 use_cuda: bool = True,
+                 use_cuda: bool = False,
                  batch_size: int = 1,
                  seed: int = 0
                 ):
@@ -682,7 +683,7 @@ class SusyDataModule(pl.LightningDataModule):
     
     def train_dataloader(self):
         return DataLoader(self.dataset, batch_size=self.batch_size, 
-                          shuffle=True, pin_memory=True, 
+                          shuffle=False, pin_memory=True, 
                           persistent_workers=self.persistent_workers,
                           num_workers=self.num_workers, collate_fn=collate_fn_flat_deal,
                           multiprocessing_context='fork')

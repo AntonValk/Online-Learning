@@ -903,7 +903,7 @@ class Fast_AuxDrop_ODL(nn.Module):
         b=0.99,
         n=0.01,
         s=0.2,
-        dropout_p=0.5,
+        dropout_p=0.3,
         n_aux_feat=3,
         use_cuda=False,
     ):
@@ -986,7 +986,7 @@ class Fast_AuxDrop_ODL(nn.Module):
         ).to(self.device)
 
         # We store loss, alpha and prediction parameter.
-        self.loss_array = []
+        self.loss_array = [self.alpha.detach()]
         self.alpha_array = []
         self.layerwise_loss_array = []
         self.prediction = []
@@ -1073,16 +1073,8 @@ class Fast_AuxDrop_ODL(nn.Module):
         # self.alpha_array.append(self.alpha.detach().numpy())
         self.alpha_array = [self.alpha]
     
-    def update_alpha(self, predictions_per_layer, Y):
-        losses_per_layer = []
-
-        for o in predictions_per_layer:
-            criterion = nn.CrossEntropyLoss().to(self.device)
-            loss = criterion(
-                o.view(self.batch_size, self.n_classes),
-                Y.long(),
-            )
-            losses_per_layer.append(loss)
+    def update_alpha(self, losses_per_layer, Y):
+        
         with torch.no_grad():
             for i in range(len(losses_per_layer)):
                 self.alpha[i] *= torch.pow(self.b, losses_per_layer[i])
@@ -1090,8 +1082,8 @@ class Fast_AuxDrop_ODL(nn.Module):
                     self.alpha[i], self.s / (len(losses_per_layer))
                 )
     
-        z_t = torch.sum(self.alpha)
-        self.alpha = Parameter(self.alpha / z_t, requires_grad=False).to(self.device)
+            z_t = torch.sum(self.alpha)
+            self.alpha = Parameter(self.alpha / z_t, requires_grad=False).to(self.device)
         # print(self.alpha)
 
         # # To save the loss
@@ -1123,6 +1115,8 @@ class Fast_AuxDrop_ODL(nn.Module):
         # X = torch.from_numpy(X).float().to(self.device)
         # aux_feat = torch.from_numpy(aux_feat).float().to(self.device)
         # aux_mask = torch.from_numpy(aux_mask).float().to(self.device)
+        # print(X, aux_feat, aux_mask)
+        # exit()
 
         # Forward pass of the first hidden layer. Apply the linear transformation and then relu. The output from the relu is the input
         # passed to the next layer.
@@ -1150,11 +1144,16 @@ class Fast_AuxDrop_ODL(nn.Module):
                     self.p * self.n_neuron_aux_layer
                     - (aux_mask.size()[1] - torch.sum(aux_mask))
                 ) / (self.n_neuron_aux_layer - aux_mask.size()[1])
+                # print(aux_p, self.p)
+                # print("RANDOM STATE", torch.random.get_rng_state())
+                # print(torch.random.initial_seed())
                 binomial = torch.distributions.binomial.Binomial(probs=1 - aux_p)
                 non_aux_mask = binomial.sample(
                     [1, self.n_neuron_aux_layer - aux_mask.size()[1]]
                 )
-                mask = torch.cat((aux_mask, non_aux_mask), dim=1)
+                mask = torch.cat((aux_mask, non_aux_mask), dim=1)    
+                # print(mask)
+                # print("sum", torch.sum(mask))
                 hidden_connections.append(relu_x[i] * mask * (1.0 / (1 - self.p)))
             else:
                 linear_x.append(self.hidden_layers[i](hidden_connections[i - 1]))
@@ -1162,6 +1161,16 @@ class Fast_AuxDrop_ODL(nn.Module):
                 hidden_connections.append(relu_x[i])
 
         output_class = []
+
+        
+        # print(linear_x)
+        # print(relu_x)
+        # print(hidden_connections)
+        # print("here")
+        # print(linear_x[-1].shape)
+        # print(relu_x[-1].shape)
+        # print(hidden_connections[-1].shape)
+        # exit()
 
         for i in range(self.max_num_hidden_layers - 1):
             if i < self.aux_layer - 2:
@@ -1179,7 +1188,7 @@ class Fast_AuxDrop_ODL(nn.Module):
 
         # return pred_per_layer
     
-        self.update_alpha(predictions_per_layer, Y)
+        # self.update_alpha(predictions_per_layer, Y)
         # print(self.alpha.shape)
         # print(self.max_num_hidden_layers)
         # print(predictions_per_layer.shape)
