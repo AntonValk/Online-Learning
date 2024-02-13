@@ -1,5 +1,7 @@
-from .models import OnlineLearner
+from .models import OnlineLearner, AlphaExperiment, VariableAlphaExperiment
 
 __all__ = [
-    'OnlineLearner'
+    'OnlineLearner',
+    'AlphaExperiment',
+    'VariableAlphaExperiment'
 ]
