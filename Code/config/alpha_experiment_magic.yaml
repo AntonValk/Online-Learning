@@ -1,8 +1,8 @@
 logging.path: "./lightning_logs/new/${dataset.name}"
 logging.name: "model=${model._target_}-backbone=${model.nn.backbone._target_}-lr=${model.optimizer.lr}-width=${model.nn.backbone.d_model}-loss=${model.loss._target_}-seed=${random.seed}"
 
-dataset._target_: dataset.GermanDataModule
-dataset.name: "german"
+dataset._target_: dataset.Magic04DataModule
+dataset.name: "magic04"
 dataset.num_workers: 1
 dataset.persistent_workers: True
 dataset.batch_size: 1
@@ -16,12 +16,12 @@ trainer.devices: 1
 trainer.accelerator: 'cpu'
 trainer.fast_dev_run: False
 
-model._target_: model.VariableAlphaExperiment
+model._target_: model.AlphaExperiment
 model.loss._target_: torch.nn.CrossEntropyLoss
 
 model.nn.backbone._target_: modules.Fast_AuxDrop_ODL
 model.nn.backbone.features_size: 2
-model.nn.backbone.n_aux_feat: 22
+model.nn.backbone.n_aux_feat: 8
 model.nn.backbone.max_num_hidden_layers: 6
 model.nn.backbone.qtd_neuron_per_hidden_layer: 50
 model.nn.backbone.n_classes: 2
@@ -31,9 +31,6 @@ model.nn.backbone.dropout: 0.3
 model.nn.backbone.d_model: 50
 
 model.optimizer._target_: torch.optim.SGD
-model.optimizer.lr: 0.1
-# model.scheduler._target_: torch.optim.lr_scheduler.LinearLR
-# model.scheduler.warmup_updates: 0
-# model.scheduler.warmup_end_lr: "${model.optimizer.lr}"
+model.optimizer.lr: 0.01
 
-# taskset -c "0-4" python run_hydra.py --config=config/var_alpha_experiment_german.yaml
+# taskset -c "0-19" python run_hydra.py --config=config/alpha_experiment_magic.yaml

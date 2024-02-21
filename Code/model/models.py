@@ -8,7 +8,7 @@ import torch
 
 from utils.model_factory import instantiate
 from metrics import CumulativeError, NormalizedCumulativeError, SmoothedCumulativeError, MovingWindowAccuracy
-from modules import ODLSetSingleStageResidualNet
+from modules import ODLSetSingleStageResidualNet, SetDecoder
     
     
 class OnlineLearner(pl.LightningModule):
@@ -42,7 +42,9 @@ class OnlineLearner(pl.LightningModule):
         batch_size=1
         net_output = self.shared_forward(batch)
         # print(batch)
-        # print(net_output)
+        # print(net_output['prediction'][0])
+        # print(net_output['prediction'][1])
+        # print(net_output['prediction'][2])
         # exit()
         
         y_hat = net_output['prediction'][0]
@@ -161,19 +163,19 @@ class AlphaExperiment(pl.LightningModule):
         #          prog_bar=True, logger=True, batch_size=batch_size)
         
         self.train_err(y_hat, batch['Y'])
-        self.log("train/cumulative_error", self.train_err.compute(), on_step=True, on_epoch=True, 
+        self.log("train/cumulative_error", self.train_err.compute(), on_step=True, on_epoch=False, 
                  prog_bar=True, logger=True, batch_size=batch_size)
         
         self.train_norm_err(y_hat, batch['Y'])
         self.log("train/normalized_error", self.train_norm_err.compute(), on_step=True, on_epoch=False, 
                  prog_bar=True, logger=True, batch_size=batch_size)
 
-        self.train_exp_err(y_hat, batch['Y'])
-        self.log("train/smoothed_error", self.train_exp_err.compute(), on_step=True, on_epoch=False, 
-                 prog_bar=True, logger=True, batch_size=batch_size)
+        # self.train_exp_err(y_hat, batch['Y'])
+        # self.log("train/smoothed_error", self.train_exp_err.compute(), on_step=True, on_epoch=False, 
+        #          prog_bar=True, logger=True, batch_size=batch_size)
 
         for i, a in enumerate(self.backbone.alpha):
-            self.log(f"train/alpha_{i}", a, on_step=True, on_epoch=False, prog_bar=True,
+            self.log(f"train/alpha_{i}", a, on_step=True, on_epoch=False, prog_bar=False,
                     logger=True, batch_size=batch_size)
             self.acc[i](net_output['prediction'][1][i], batch['Y'])
             self.log(f"train/clf-{i}-accuracy", self.acc[i].compute(), on_step=True, on_epoch=False, 
