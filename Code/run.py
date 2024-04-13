@@ -52,7 +52,7 @@ model_to_run = "Fast_AuxDrop_ODL"
 
 # Values to change
 n = 0.05
-aux_feat_prob = 0.8
+aux_feat_prob = 0.7
 dropout_p = 0.3
 max_num_hidden_layers = 11
 qtd_neuron_per_hidden_layer = 50
@@ -64,6 +64,100 @@ b = 0.99
 s = 0.2
 use_cuda = False
 number_of_experiments = 5
+
+
+n_base_feat, n_aux_feat, X_base, X_aux, X_aux_new, aux_mask, Y, label = dataset(
+        data_name, type=type, aux_feat_prob=aux_feat_prob, use_cuda=use_cuda, seed=0
+    )
+
+y=Y
+X = np.concatenate((X_base, X_aux_new), axis=1)
+
+print(X.shape)
+print(y.shape)
+print(X.mean(axis=1))
+print(y[0])
+exit()
+
+# "CD1", "CD2", "HIGGS_5M", "SUSY_5M", "SYN8"
+data_name = "SUSY_5M"
+X = np.load(f"dataset/Datasets/{data_name}/data/x_train.npy")
+y = np.load(f"dataset/Datasets/{data_name}/data/y_train.npy")
+
+y = np.argmax(y, axis=1)
+
+# split X and y into training and testing sets
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
+
+lr = []
+tree = []
+nn = []
+for split in [0.1, 0.2, 0.5, 0.8, 0.9]:
+    # X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=split, random_state=16)
+    X_train, X_test, y_train, y_test = X[:int(split*len(X))], X[int(split*len(X)):], y[:int(split*len(X))], y[int(split*len(X)):]
+    logreg = LogisticRegression(random_state=16, max_iter=1000)
+    logreg.fit(X_train, y_train)
+    y_pred = logreg.predict(X_test)
+    # import the metrics class
+    from sklearn import metrics
+    
+    cnf_matrix = metrics.confusion_matrix(y_test, y_pred)
+    from sklearn.metrics import classification_report
+    target_names = ['0', '1']
+    # print(classification_report(y_test, y_pred, target_names=target_names))
+    # print('norm. cumulative errors:', 5*(cnf_matrix[0,1]+cnf_matrix[1,0]))
+    lr.append(metrics.accuracy_score(y_test, y_pred))
+    
+    from catboost import CatBoostClassifier
+    model = CatBoostClassifier(
+        iterations=5,
+        learning_rate=0.1,
+        min_data_in_leaf=20,
+        depth=15, 
+        grow_policy= "Depthwise"
+        # loss_function='CrossEntropy'
+    )
+    model.fit(
+        X_train, y_train,
+        cat_features=None,
+        verbose=False
+    )
+    # print('Model is fitted: ' + str(model.is_fitted()))
+    # print('Model params:')
+    # print('catboost')
+    y_pred = model.predict(X_test)
+    # import the metrics class
+    cnf_matrix = metrics.confusion_matrix(y_test, y_pred)
+    # print(cnf_matrix)
+    target_names = ['0', '1']
+    # print(classification_report(y_test, y_pred, target_names=target_names))
+    # print('norm. cumulative errors:', 5*(cnf_matrix[0,1]+cnf_matrix[1,0]))
+    tree.append(metrics.accuracy_score(y_test, y_pred))
+
+    from sklearn.neural_network import MLPClassifier
+    # print("nn")
+    clf = MLPClassifier(solver='sgd', alpha=1e-4, hidden_layer_sizes=(100, 100, 100), random_state=1, batch_size=100, verbose=True, max_iter=2, learning_rate_init=0.001)
+    clf.fit(X_train, y_train)
+    y_pred = clf.predict(X_test)
+    cnf_matrix = metrics.confusion_matrix(y_test, y_pred)
+    # print(cnf_matrix)
+    target_names = ['0', '1']
+    # print(classification_report(y_test, y_pred, target_names=target_names))
+    # print('norm. cumulative errors:', 5*(cnf_matrix[0,1]+cnf_matrix[1,0]))
+    nn.append(metrics.accuracy_score(y_test, y_pred))
+    
+df = pd.DataFrame(
+    {'train split': [0.1, 0.2, 0.5, 0.8, 0.9],
+     'logistic regression': lr,
+     'cat boost': tree,
+     'mlp': nn
+    })
+df.to_csv(f"{data_name}_test.csv")
+print(df)
+exit()
+
+
 
 error_list = []
 loss_list = []

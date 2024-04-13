@@ -1,8 +1,8 @@
-from .residual import ODLSetSingleStageResidualNet, SetSingleStageResidualNet, SingleStageResidualNet, AuxDrop_OGD, SingleStageResidualNetODL, Fast_AuxDrop_ODL, SetDecoder
+from .residual import ODLSetSingleStageResidualNet, SetSingleStageResidualNet, SingleStageResidualNet, AuxDrop_OGD, SingleStageResidualNetODL, Fast_AuxDrop_ODL, SetDecoder, MLP, StackofExperts
 from .custom_layers import FCBlock, LayerNorm, FCBlockNorm, Embedding
 
 __all__ = [
     'ODLSetSingleStageResidualNet', 'SetSingleStageResidualNet', 'SingleStageResidualNet', 'AuxDrop_OGD', 'SingleStageResidualNetODL', 
     'Fast_AuxDrop_ODL', 'SetDecoder', 
-    'FCBlock', 'LayerNorm', 'FCBlockNorm', 'Embedding'
+    'FCBlock', 'LayerNorm', 'FCBlockNorm', 'Embedding', 'MLP', 'StackofExperts'
 ]

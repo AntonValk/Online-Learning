@@ -12,6 +12,95 @@ from modules.custom_layers import FCBlockNorm
 from typing import Tuple
 
 
+class StackofExperts(torch.nn.Module):
+    """Fully connected MLP layer"""
+
+    def __init__(self, num_layers: int, layer_width: int, size_in: int, size_out: int, variance: float, activation = F.relu):
+        super(StackofExperts, self).__init__()
+        self.num_layers = num_layers
+        self.layer_width = layer_width
+        self.size_in = size_in
+        self.size_out = size_out
+        self.activation = activation
+        self.variance = variance
+        self.theta = torch.zeros(size_in + 1, requires_grad=False)
+        self.Hessian = self.variance * torch.eye(size_in + 1, requires_grad=False)
+                
+        assert num_layers > 1, f"MLP has to have at least 2 layers, {num_layers} specified"
+
+        self.fc_layers = [torch.nn.Linear(size_in, layer_width)]
+        self.fc_layers += [torch.nn.Linear(layer_width, layer_width) for _ in range(num_layers - 2)]
+        self.fc_layers += [torch.nn.Linear(layer_width, size_out)]
+        self.fc_layers = torch.nn.ModuleList(self.fc_layers)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        X = x['X_base']
+        aux_feat = x['X_aux_new']
+        aux_mask = x['aux_mask']
+        Y = x['Y']
+        x = torch.cat([X, aux_feat * aux_mask], axis=1)
+        y_hat_lr = self.online_logistic_regression_step(x, Y)
+        h = x
+        for layer in self.fc_layers[:-1]:
+            h = self.activation(layer(h))
+        return F.softmax(self.fc_layers[-1](h)) + y_hat_lr
+
+    def online_logistic_regression_step(self, x: torch.Tensor, Y: torch.Tensor) -> torch.Tensor:
+        with torch.no_grad():
+            x = torch.cat([x[0], torch.ones(1)])
+           
+            def sigmoid(x):
+                x = torch.clamp(x, min=-10, max=10)
+                return 1/(1+torch.exp(-x))
+    
+            y_hat_lr = np.array([1-sigmoid(x @ self.theta).detach(), sigmoid(x @ self.theta).detach()])
+            y_hat_lr = y_hat_lr.T
+            y_hat_lr = torch.Tensor(y_hat_lr)
+            y_hat_lr = y_hat_lr.reshape(1,-1)
+    
+            def rirls(X, y, theta0, Lambda0, theta):
+                H_k = X
+                P_k_old = Lambda0
+                S_k = H_k @ P_k_old @ H_k.T + sigmoid(H_k @ theta0).detach().item() * (1-sigmoid(H_k @ theta0).detach().item())
+                K_k = P_k_old @ H_k.T * 1/S_k
+                theta = theta0 + K_k * (y - sigmoid(H_k @ theta0))
+                Hessian = P_k_old - torch.outer(K_k, K_k) * S_k
+                return theta, Hessian
+    
+            self.theta, self.Hessian = rirls(x, Y, theta0=self.theta, Lambda0=self.Hessian, theta=self.theta)
+
+            return y_hat_lr
+        
+
+class MLP(torch.nn.Module):
+    """Fully connected MLP layer"""
+
+    def __init__(self, num_layers: int, layer_width: int, size_in: int, size_out: int, activation = F.relu):
+        super(MLP, self).__init__()
+        self.num_layers = num_layers
+        self.layer_width = layer_width
+        self.size_in = size_in
+        self.size_out = size_out
+        self.activation = activation
+                
+        assert num_layers > 1, f"MLP has to have at least 2 layers, {num_layers} specified"
+
+        self.fc_layers = [torch.nn.Linear(size_in, layer_width)]
+        self.fc_layers += [torch.nn.Linear(layer_width, layer_width) for _ in range(num_layers - 2)]
+        self.fc_layers += [torch.nn.Linear(layer_width, size_out)]
+        self.fc_layers = torch.nn.ModuleList(self.fc_layers)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        X = x['X_base']
+        aux_feat = x['X_aux_new']
+        aux_mask = x['aux_mask']
+        x = torch.cat([X, aux_feat * aux_mask], axis=1)
+        h = x
+        for layer in self.fc_layers[:-1]:
+            h = self.activation(layer(h))
+        return F.softmax(self.fc_layers[-1](h))
+        
+        
 class SetDecoder(t.nn.Module):
     """
     Fully-connected residual architechture with OGD online learning backbone
