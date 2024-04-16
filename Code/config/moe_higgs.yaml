@@ -1,4 +1,4 @@
-logging.path: "./lightning_logs/moe/${dataset.name}"
+logging.path: "./lightning_logs/plus_moe/${dataset.name}"
 logging.name: "model=${model._target_}-backbone=${model.nn.backbone._target_}-lr=${model.optimizer.lr}-width=${model.nn.backbone.layer_width}-layers=${model.nn.backbone.num_layers}-loss=${model.loss._target_}-seed=${random.seed}-p${dataset.aux_feat_prob}"
 
 dataset._target_: dataset.HiggsDataModule
@@ -6,7 +6,8 @@ dataset.name: "HIGGS"
 dataset.num_workers: 1
 dataset.persistent_workers: True
 dataset.batch_size: 1
-dataset.aux_feat_prob: !!python/tuple [0.01,0.05,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,0.95,0.99]
+# dataset.aux_feat_prob: !!python/tuple [0.01,0.05,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,0.95,0.99]
+dataset.aux_feat_prob: !!python/tuple [0.01, 0.05, 0.2, 0.4, 0.6, 0.8, 0.95, 0.99]
 
 random.seed: !!python/tuple [0,1,2]
 

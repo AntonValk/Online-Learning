@@ -1,4 +1,4 @@
-logging.path: "./lightning_logs/soe/${dataset.name}"
+logging.path: "./lightning_logs/logplus_soe/${dataset.name}"
 logging.name: "model=${model._target_}-backbone=${model.nn.backbone._target_}-lr=${model.optimizer.lr}-width=${model.nn.backbone.layer_width}-layers=${model.nn.backbone.num_layers}-loss=${model.loss._target_}-seed=${random.seed}"
 
 dataset._target_: dataset.a8aDataModule

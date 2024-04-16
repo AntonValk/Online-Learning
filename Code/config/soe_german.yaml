@@ -1,4 +1,4 @@
-logging.path: "./lightning_logs/soe/${dataset.name}"
+logging.path: "./lightning_logs/soe_sum/${dataset.name}"
 logging.name: "model=${model._target_}-backbone=${model.nn.backbone._target_}-lr=${model.optimizer.lr}-width=${model.nn.backbone.layer_width}-layers=${model.nn.backbone.num_layers}-loss=${model.loss._target_}-seed=${random.seed}"
 
 dataset._target_: dataset.GermanDataModule
@@ -15,10 +15,10 @@ trainer.devices: 1
 trainer.accelerator: 'cpu'
 trainer.fast_dev_run: False
 
-model._target_: model.OnlineDelta
+model._target_: model.OnlineDeltaU
 model.loss._target_: torch.nn.CrossEntropyLoss
 
-model.nn.backbone._target_: modules.StackofExperts
+model.nn.backbone._target_: modules.StackofExperts2
 model.nn.backbone.size_in: 24
 model.nn.backbone.num_layers: 3
 model.nn.backbone.layer_width: 250

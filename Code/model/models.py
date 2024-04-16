@@ -50,7 +50,79 @@ class OnlineDelta(pl.LightningModule):
                 y_hat.view(batch_size, 2),
                 batch['Y'].view(batch_size).long(),
             )
+        
+        return loss
 
+    def configure_optimizers(self):
+        optimizer = instantiate(self.cfg.model.optimizer, self.parameters())
+        return optimizer
+
+class OnlineDeltaU(pl.LightningModule):
+    def __init__(self, cfg):
+        super().__init__()
+        self.cfg = cfg
+        self.save_hyperparameters()
+        self.backbone = instantiate(cfg.model.nn.backbone)
+        self.init_metrics()
+        self.loss = instantiate(cfg.model.loss)
+        self.automatic_optimization = False
+
+        
+    def init_metrics(self):
+        self.train_norm_err = NormalizedCumulativeError()
+        self.train_err = CumulativeError()
+        self.train_norm_err_MLP = NormalizedCumulativeError()
+        self.train_norm_err_LR = NormalizedCumulativeError()
+
+    def shared_forward(self, x): 
+        prediction = self.backbone(x)   
+        return {'prediction': prediction}
+
+    def forward(self, x):
+        out = self.shared_forward(x)
+        return out['prediction']
+
+    def training_step(self, batch, batch_idx):
+        opt = self.optimizers()
+        opt.zero_grad()
+        
+        batch_size=1
+        net_output = self.shared_forward(batch)
+        y_hat_lr = net_output['prediction'][0]
+        y_hat_lr = y_hat_lr.reshape(1,-1)
+
+        y_hat_MLP = net_output['prediction'][1]
+        y_hat_MLP = y_hat_MLP.reshape(1,-1)
+
+
+        self.train_norm_err_MLP(y_hat_MLP, batch['Y'])
+        self.log("train/normalized_error_MLP", self.train_norm_err_MLP.compute(), on_step=True, on_epoch=False, 
+                 prog_bar=True, logger=True, batch_size=batch_size)
+
+        self.train_norm_err_LR(y_hat_lr, batch['Y'])
+        self.log("train/normalized_error_LR", self.train_norm_err_LR.compute(), on_step=True, on_epoch=False, 
+                     prog_bar=True, logger=True, batch_size=batch_size)
+        weights = np.array([1-self.train_norm_err_LR.compute(), 1-self.train_norm_err_MLP.compute()])/0.1
+        weights = torch.Tensor(weights).view(1, -1)
+        weights = torch.softmax(weights, dim=1)[0]
+
+        y_hat = y_hat_lr * weights[0] + y_hat_MLP * weights[1]
+        
+        self.train_err(y_hat, batch['Y'])
+        self.log("train/cumulative_error", self.train_err.compute(), on_step=True, on_epoch=True, 
+                 prog_bar=True, logger=True, batch_size=batch_size)
+        
+        self.train_norm_err(y_hat, batch['Y'])
+        self.log("train/normalized_error", self.train_norm_err.compute(), on_step=True, on_epoch=False, 
+                 prog_bar=True, logger=True, batch_size=batch_size)
+
+        loss = self.loss(
+                y_hat.view(batch_size, 2),
+                batch['Y'].view(batch_size).long(),
+            )
+
+        self.manual_backward(loss)
+        opt.step()
         return loss
 
     def configure_optimizers(self):
@@ -130,11 +202,13 @@ class OnlineMoE(pl.LightningModule):
             self.train_norm_err_LR(y_hat_lr, batch['Y'])
             self.log("train/normalized_error_LR", self.train_norm_err_LR.compute(), on_step=True, on_epoch=False, 
                      prog_bar=True, logger=True, batch_size=batch_size)
-            weights = np.array([1-self.train_norm_err_LR.compute(), 1-self.train_norm_err_MLP.compute()])/self.temperature
-            weights = torch.Tensor(weights).view(1, -1)
-            weights = torch.softmax(weights, dim=1)[0]
-            y_hat = y_hat_lr * weights[0] + y_hat_MLP * weights[1]
-            # y_hat = y_hat_lr + y_hat_MLP
+            # weights = np.array([1-self.train_norm_err_LR.compute(), 1-self.train_norm_err_MLP.compute()])/self.temperature
+            # weights = torch.Tensor(weights).view(1, -1)
+            # weights = torch.softmax(weights, dim=1)[0]
+            # y_hat = y_hat_lr * weights[0] + y_hat_MLP * weights[1]
+            y_hat = y_hat_lr + y_hat_MLP
+            # y_hat = F.log_softmax(y_hat_lr, dim=1) + F.log_softmax(y_hat_MLP, dim=1) 
+            
             
             self.train_err(y_hat, batch['Y'])
             self.log("train/cumulative_error", self.train_err.compute(), on_step=True, on_epoch=True, 
@@ -204,8 +278,8 @@ class OnlineLearner(pl.LightningModule):
         opt.step()
         
         self.backbone.update_alpha(losses_per_layer, batch['Y'])
-        self.manual_backward(loss)
-        opt.step()
+        # self.manual_backward(loss)
+        # opt.step()
         
         # self.log("train/loss", loss, on_step=False, on_epoch=True, 
         #          prog_bar=True, logger=True, batch_size=batch_size)
