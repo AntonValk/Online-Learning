@@ -79,7 +79,7 @@ class StackofExperts(torch.nn.Module):
             def rirls(X, y, theta0, Lambda0, theta):
                 H_k = X
                 P_k_old = Lambda0
-                S_k = H_k @ P_k_old @ H_k.T + sigmoid(H_k @ theta0).detach().item() * (1-sigmoid(H_k @ theta0).detach().item())
+                S_k = H_k @ P_k_old @ H_k.T + (sigmoid(H_k @ theta0).detach().item() * (1-sigmoid(H_k @ theta0).detach().item()))
                 K_k = P_k_old @ H_k.T * 1/S_k
                 theta = theta0 + K_k * (y - sigmoid(H_k @ theta0))
                 Hessian = P_k_old - torch.outer(K_k, K_k) * S_k

@@ -1,4 +1,4 @@
-logging.path: "./lightning_logs/plus_moe/${dataset.name}"
+logging.path: "./lightning_logs/log_moe/${dataset.name}"
 logging.name: "model=${model._target_}-backbone=${model.nn.backbone._target_}-lr=${model.optimizer.lr}-width=${model.nn.backbone.layer_width}-layers=${model.nn.backbone.num_layers}-loss=${model.loss._target_}-seed=${random.seed}-p${dataset.aux_feat_prob}"
 
 dataset._target_: dataset.HiggsDataModule

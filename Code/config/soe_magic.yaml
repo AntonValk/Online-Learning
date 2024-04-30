@@ -1,4 +1,4 @@
-logging.path: "./lightning_logs/logplus_soe/${dataset.name}"
+logging.path: "./lightning_logs/softmax_soe/${dataset.name}"
 logging.name: "model=${model._target_}-backbone=${model.nn.backbone._target_}-lr=${model.optimizer.lr}-width=${model.nn.backbone.layer_width}-layers=${model.nn.backbone.num_layers}-loss=${model.loss._target_}-seed=${random.seed}"
 
 dataset._target_: dataset.Magic04DataModule
@@ -15,10 +15,10 @@ trainer.devices: 1
 trainer.accelerator: 'cpu'
 trainer.fast_dev_run: False
 
-model._target_: model.OnlineDelta
+model._target_: model.OnlineDeltaU
 model.loss._target_: torch.nn.CrossEntropyLoss
 
-model.nn.backbone._target_: modules.StackofExperts
+model.nn.backbone._target_: modules.StackofExperts2
 model.nn.backbone.variance: 0.001
 model.nn.backbone.size_in: 10
 model.nn.backbone.num_layers: 3
@@ -28,6 +28,6 @@ model.nn.backbone.size_out: 2
 model.nn.backbone.dropout: 0.3
 
 model.optimizer._target_: torch.optim.SGD
-model.optimizer.lr: 0.0005
+model.optimizer.lr: 0.001
 
 # taskset -c "0-19" python run_hydra.py --config=config/moe_magic.yaml

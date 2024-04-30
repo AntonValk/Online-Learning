@@ -1,4 +1,4 @@
-logging.path: "./lightning_logs/soe_sum/${dataset.name}"
+logging.path: "./lightning_logs/softmax_soe/${dataset.name}"
 logging.name: "model=${model._target_}-backbone=${model.nn.backbone._target_}-lr=${model.optimizer.lr}-width=${model.nn.backbone.layer_width}-layers=${model.nn.backbone.num_layers}-loss=${model.loss._target_}-seed=${random.seed}"
 
 dataset._target_: dataset.GermanDataModule
@@ -29,6 +29,6 @@ model.nn.backbone.variance: 0.01
 
 
 model.optimizer._target_: torch.optim.SGD
-model.optimizer.lr: 0.001
+model.optimizer.lr: 0.01
 
 # taskset -c "0-19" python run_hydra.py --config=config/moe_german.yaml
