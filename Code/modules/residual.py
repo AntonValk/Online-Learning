@@ -1,4 +1,4 @@
-# Libraries requied
+# Libraries required
 import numpy as np
 import torch
 import torch.nn as nn
@@ -10,6 +10,184 @@ import torch as t
 from modules.custom_layers import Embedding, FCBlock
 from modules.custom_layers import FCBlockNorm
 from typing import Tuple
+
+
+class KalmanMLPproto(torch.nn.Module):
+    """
+    Fully-connected residual architechture with OGD online learning backbone
+    """
+
+    def __init__(self, size_in: int, size_in_MLP: int, size_out: int, variance: float, activation = F.relu,
+                 num_layers: int = 3, layer_width: int = 250, eps: float = 1e-6,
+                 num_blocks_enc: int = 2, num_layers_enc: int = 2, layer_width_enc: int = 250,
+                 num_blocks_stage: int = 2, num_layers_stage: int = 2, layer_width_stage: int = 250,
+                 dropout: float = 0.3, norm_inputs: bool = True,
+                 embedding_dim: int = 32, embedding_size: int = 150, embedding_num: int = 1, layer_norm: bool = True,
+                 b: float=0.99, s: float = 0.2, use_cuda: bool = False, batch_size: int = 1, n_classes: int = 2):
+                 
+        super().__init__()
+
+        self.num_layers = num_layers
+        self.layer_width = layer_width
+        self.size_in = size_in
+        self.size_out = size_out
+        self.activation = activation
+        self.variance = variance
+        self.theta = torch.zeros(size_in_MLP + 1, requires_grad=False)
+        self.Hessian = self.variance * torch.eye(size_in_MLP + 1, requires_grad=False)
+                
+        assert num_layers > 1, f"MLP has to have at least 2 layers, {num_layers} specified"
+
+        self.fc_layers = [torch.nn.Linear(size_in_MLP, layer_width)]
+        self.fc_layers += [torch.nn.Linear(layer_width, layer_width) for _ in range(num_layers - 2)]
+        self.fc_layers += [torch.nn.Linear(layer_width, size_out)]
+        self.fc_layers = torch.nn.ModuleList(self.fc_layers)
+        self.norm_inputs = norm_inputs
+
+        self.layer_width_enc = layer_width_enc
+        self.batch_size = batch_size
+        self.n_classes = n_classes
+        self.device = torch.device(
+            "cuda:0" if torch.cuda.is_available() and use_cuda else "cpu"
+        )
+        
+        self.embeddings = [Embedding(num_embeddings=embedding_size, embedding_dim=embedding_dim) for _ in
+                           range(embedding_num)]
+        
+
+        self.max_num_hidden_layers = num_blocks_stage
+
+        # Stores hidden and output layers
+        self.output_layers = []
+        self.project = nn.Linear(size_in + embedding_dim * embedding_num, layer_width_stage)
+
+        for i in range(self.max_num_hidden_layers):
+            self.output_layers.append(nn.Linear(layer_width_stage, size_out))
+
+        self.output_layers = nn.ModuleList(self.output_layers).to(self.device)
+        
+        if layer_norm:
+            self.stage_blocks = [FCBlockNorm(num_layers=num_layers_stage, layer_width=layer_width_stage, dropout=dropout,
+                                                size_in=layer_width_stage, size_out=layer_width_stage, eps=eps)] + \
+                                 [FCBlockNorm(num_layers=num_layers_stage, layer_width=layer_width_stage, dropout=dropout,
+                                                size_in=layer_width_stage, size_out=layer_width_stage, eps=eps) for _ in range(num_blocks_stage - 1)]
+        else:
+            self.stage_blocks = [FCBlock(num_layers=num_layers_stage, layer_width=layer_width_stage,
+                                              dropout=dropout, size_in=layer_width_stage, size_out=layer_width_stage)] + \
+                                 [FCBlock(num_layers=num_layers_stage, layer_width=layer_width_stage,
+                                              dropout=dropout, size_in=layer_width_stage, size_out=layer_width_stage) for _ in range(num_blocks_stage - 1)]
+
+        self.model = t.nn.ModuleList(self.stage_blocks + self.embeddings)
+        self.loss_fn = nn.CrossEntropyLoss()
+        self.prediction = []
+        self.loss_array = []
+
+        # The alpha values sum to 1 and are equal at the beginning of the training.
+        self.alpha = Parameter(
+            torch.Tensor(self.max_num_hidden_layers).fill_(1 / (self.max_num_hidden_layers)), requires_grad=False
+        ).to(self.device)
+        
+        self.loss_fn = nn.CrossEntropyLoss()
+        self.prediction = []
+        self.hidden_preds = []
+
+    def project_set(self, x: t.Tensor, weights: t.Tensor, *args) -> t.Tensor:
+        """
+        x the continuous input : BxF
+        e the categorical inputs BxC
+        """
+
+        self.hidden_preds = []
+        weights_sum = weights.sum(dim=1, keepdim=True)
+        weights_sum[weights_sum == 0.0] = 1
+        weights = weights.unsqueeze(-1)
+
+        ee = [x.unsqueeze(-1)]
+        for i, v in enumerate(args):
+            ee.append(self.embeddings[i](v).unsqueeze(0))
+
+        proj = torch.cat(ee, dim=-1)
+        proj = proj.reshape(proj.shape[0], x.shape[1], -1)
+        proj = self.project(proj)
+        proj = (proj * weights).sum(dim=1, keepdim=True) / weights_sum
+        return proj.squeeze(1)
+
+    
+    def decode(self, full_embedding: t.Tensor) -> Tuple[t.Tensor, t.Tensor]:
+        backcast = full_embedding
+        stage_forecast = 0.0
+        for i, block in enumerate(self.stage_blocks):
+            backcast, f = block(backcast)
+            stage_forecast = stage_forecast + f
+            self.hidden_preds.append(F.softmax(self.output_layers[i](stage_forecast), dim=1))
+        pred_per_layer = torch.stack(self.hidden_preds)
+        return pred_per_layer
+
+    def proto_forward(self, x: t.Tensor, *args) -> Tuple[t.Tensor, t.Tensor]:
+        """
+        x the continuous input : BxF
+        e the categorical inputs BxC
+        """
+        # print(x.keys())
+        X = x['X_base']
+        aux_feat = x['X_aux_new']
+        aux_mask = x['aux_mask']
+        Y = x['Y']
+        x = t.cat([X, aux_feat[aux_mask==1].unsqueeze(0)], axis=1)
+        if self.norm_inputs:
+            with torch.no_grad():
+                # x = torch.log(torch.abs(x + 1) * torch.sign(x))
+                x = torch.log(torch.abs(x + 1))
+        weights = t.ones(X.shape[1]+t.sum(aux_mask, dtype=int).item()).unsqueeze(0)
+        # print(X, aux_mask, aux_feat, x)
+        # INSERT AUGMENTATIONS HERE
+        ids = torch.cat([torch.arange(X.shape[1]), torch.nonzero(aux_mask[0]).reshape(-1)+ X.shape[1]])
+        full_embedding = self.project_set(x, weights, ids)
+        predictions_per_layer = self.decode(full_embedding)  
+        return torch.sum(predictions_per_layer, 0)
+
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        proto_pred = self.proto_forward(x)
+        X = x['X_base']
+        aux_feat = x['X_aux_new']
+        aux_mask = x['aux_mask']
+        Y = x['Y']
+        x = torch.cat([X, aux_feat * aux_mask], axis=1)
+        y_hat_lr = self.online_logistic_regression_step(x, Y)
+        h = x
+        for layer in self.fc_layers[:-1]:
+            h = self.activation(layer(h))
+        y_hat_MLP = self.fc_layers[-1](h)
+        y_hat = y_hat_lr + y_hat_MLP + 0.25 * proto_pred
+        return y_hat
+
+    def online_logistic_regression_step(self, x: torch.Tensor, Y: torch.Tensor) -> torch.Tensor:
+        with torch.no_grad():
+            x = torch.cat([x[0], torch.ones(1)])
+           
+            def sigmoid(x):
+                x = torch.clamp(x, min=-10, max=10)
+                return 1/(1+torch.exp(-x))
+    
+            y_hat_lr = np.array([1-sigmoid(x @ self.theta).detach(), sigmoid(x @ self.theta).detach()])
+            y_hat_lr = y_hat_lr.T
+            y_hat_lr = torch.Tensor(y_hat_lr)
+            y_hat_lr = y_hat_lr.reshape(1,-1)
+    
+            def rirls(X, y, theta0, Lambda0, theta):
+                H_k = X
+                P_k_old = Lambda0
+                S_k = H_k @ P_k_old @ H_k.T + (sigmoid(H_k @ theta0).detach().item() * (1-sigmoid(H_k @ theta0).detach().item())) ** 2
+                K_k = P_k_old @ H_k.T * 1/S_k
+                theta = theta0 + K_k * (y - sigmoid(H_k @ theta0))
+                Hessian = P_k_old - torch.outer(K_k, K_k) * S_k
+                return theta, Hessian
+    
+            self.theta, self.Hessian = rirls(x, Y, theta0=self.theta, Lambda0=self.Hessian, theta=self.theta)
+
+            return y_hat_lr
+
 
 
 class StackofExperts(torch.nn.Module):
@@ -53,8 +231,8 @@ class StackofExperts(torch.nn.Module):
 
         y_hat_MLP = self.fc_layers[-1](h)
         # y_hat = y_hat_lr * self.w[0] + y_hat_MLP * self.w[1]
-        # y_hat = y_hat_lr + y_hat_MLP
-        y_hat = F.log_softmax(y_hat_lr, dim=1) + F.log_softmax(y_hat_MLP, dim=1) 
+        y_hat = y_hat_lr + y_hat_MLP
+        # y_hat = F.log_softmax(y_hat_lr, dim=1) + F.log_softmax(y_hat_MLP, dim=1) 
         # return y_hat
         # y_hat = torch.cat([y_hat_lr, F.softmax(y_hat_MLP,dim=1)],dim=1)
         # print(y_hat)
@@ -79,7 +257,7 @@ class StackofExperts(torch.nn.Module):
             def rirls(X, y, theta0, Lambda0, theta):
                 H_k = X
                 P_k_old = Lambda0
-                S_k = H_k @ P_k_old @ H_k.T + (sigmoid(H_k @ theta0).detach().item() * (1-sigmoid(H_k @ theta0).detach().item()))
+                S_k = H_k @ P_k_old @ H_k.T + (sigmoid(H_k @ theta0).detach().item() * (1-sigmoid(H_k @ theta0).detach().item())) ** 2
                 K_k = P_k_old @ H_k.T * 1/S_k
                 theta = theta0 + K_k * (y - sigmoid(H_k @ theta0))
                 Hessian = P_k_old - torch.outer(K_k, K_k) * S_k

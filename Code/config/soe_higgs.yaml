@@ -1,4 +1,4 @@
-logging.path: "./lightning_logs/soe_log/${dataset.name}"
+logging.path: "./lightning_logs/soe_sum/${dataset.name}"
 logging.name: "model=${model._target_}-backbone=${model.nn.backbone._target_}-lr=${model.optimizer.lr}-width=${model.nn.backbone.layer_width}-layers=${model.nn.backbone.num_layers}-loss=${model.loss._target_}-seed=${random.seed}-p${dataset.aux_feat_prob}"
 
 dataset._target_: dataset.HiggsDataModule
@@ -10,6 +10,7 @@ dataset.batch_size: 1
 dataset.aux_feat_prob: !!python/tuple [0.01, 0.05, 0.2, 0.4, 0.6, 0.8, 0.95, 0.99]
 
 random.seed: !!python/tuple [0,1,2]
+# random.seed: !!python/tuple [0,1,2,3,4]
 
 trainer.max_epochs: 1
 trainer.log_every_n_steps: 1
@@ -30,7 +31,7 @@ model.nn.backbone.size_out: 2
 model.nn.backbone.dropout: 0.3
 
 model.optimizer._target_: torch.optim.SGD
-model.optimizer.lr: 0.05
+model.optimizer.lr: 0.01
 
 # taskset -c "0-4" python run_hydra.py --config=config/fast_odl_german.yaml
 
