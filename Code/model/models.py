@@ -611,9 +611,9 @@ class OnlineLogisticRegression(pl.LightningModule):
         self.backbone = instantiate(cfg.model.nn.backbone)
         self.init_metrics()
         self.loss = instantiate(cfg.model.loss)
-        self.automatic_optimization = False
-        self.theta = torch.zeros(cfg.model.nn.backbone.features_size + cfg.model.nn.backbone.n_aux_feat + 1)
-        self.Hessian = 0.01*torch.eye(cfg.model.nn.backbone.features_size + cfg.model.nn.backbone.n_aux_feat + 1)
+        # self.automatic_optimization = False
+        self.theta = torch.zeros(cfg.model.nn.backbone.size_in + 1)
+        self.Hessian = 0.01*torch.eye(cfg.model.nn.backbone.size_in + 1)
         
     def init_metrics(self):
         self.train_norm_err = NormalizedCumulativeError()
@@ -622,7 +622,6 @@ class OnlineLogisticRegression(pl.LightningModule):
 
     def shared_forward(self, x): 
         prediction = self.backbone(x)   
-        # self.backbone.update_alpha(prediction[1], x['Y'])
         return {'prediction': prediction}
 
     def forward(self, x):
@@ -630,37 +629,36 @@ class OnlineLogisticRegression(pl.LightningModule):
         return out['prediction']
 
     def training_step(self, batch, batch_idx):
-        
-        opt = self.optimizers()
-        opt.zero_grad()
         batch_size=1
         net_output = self.shared_forward(batch)
-        # print(batch)
-        # exit()
-        # print(net_output['prediction'][0])
-        # print(net_output['prediction'][1])
-        # print(net_output['prediction'][2])
-        # exit()
-        
         y_hat = net_output['prediction'][0]
-        # loss = self.loss(y_hat, batch['Y']) 
-        losses_per_layer = []
-        for out in net_output['prediction'][1]:
-            criterion = self.loss
-            loss = criterion(
-                out.view(batch_size, 2),
+        y_hat = y_hat.reshape(1,-1)
+   
+        self.train_err(y_hat, batch['Y'])
+        self.log("train/cumulative_error", self.train_err.compute(), on_step=True, on_epoch=True, 
+                 prog_bar=True, logger=True, batch_size=batch_size)
+        
+        self.train_norm_err(y_hat, batch['Y'])
+        self.log("train/normalized_error", self.train_norm_err.compute(), on_step=True, on_epoch=False, 
+                 prog_bar=True, logger=True, batch_size=batch_size)
+
+        loss = self.loss(
+                y_hat.view(batch_size, 2),
                 batch['Y'].view(batch_size).long(),
             )
-            losses_per_layer.append(loss)
 
-        total_loss = torch.dot(self.backbone.alpha, torch.stack(losses_per_layer))
-        self.manual_backward(total_loss)
-        opt.step()
+        return loss
+
+    def training_step(self, batch, batch_idx):
+        batch_size=1
+        net_output = self.shared_forward(batch)
+        y_hat = net_output['prediction'][0]
+        y_hat = y_hat.reshape(1,-1)
+        loss = self.loss(
+                y_hat.view(batch_size, 2),
+                batch['Y'].view(batch_size).long(),
+            )
         
-        self.backbone.update_alpha(losses_per_layer, batch['Y'])
-        self.manual_backward(loss)
-        opt.step()
-
         x = batch
         X = x['X_base']
         aux_feat = x['X_aux_new']
@@ -698,3 +696,11 @@ class OnlineLogisticRegression(pl.LightningModule):
                  prog_bar=True, logger=True, batch_size=batch_size)
 
         return loss
+        
+    def configure_optimizers(self):
+        optimizer = instantiate(self.cfg.model.optimizer, self.parameters())
+        # scheduler = instantiate(self.cfg.model.scheduler, optimizer)
+        # if scheduler is not None:
+        #     optimizer = {"optimizer": optimizer, 
+        #                  "lr_scheduler": {"scheduler": scheduler, "interval": "step"}}
+        return optimizer

@@ -1,4 +1,4 @@
-logging.path: "./lightning_logs/figure_2/${dataset.name}"
+logging.path: "./lightning_logs/figure_1/${dataset.name}"
 logging.name: "model=${model._target_}-backbone=${model.nn.backbone._target_}-lr=${model.optimizer.lr}-width=${model.nn.backbone.layer_width}-layers=${model.nn.backbone.num_layers}-loss=${model.loss._target_}-seed=${random.seed}-p${dataset.aux_feat_prob}"
 
 dataset._target_: dataset.SusyDataModule
@@ -17,14 +17,12 @@ trainer.devices: 1
 trainer.accelerator: 'cpu'
 trainer.fast_dev_run: False
 
-model._target_: model.OnlineMoE
+model._target_: model.OnlineLogisticRegression
 model.loss._target_: torch.nn.CrossEntropyLoss
-
-model.variance: 0.001
-model.temperature: 0.01
 
 model.nn.backbone._target_: modules.MLP
 model.nn.backbone.size_in: 8
+model.nn.backbone.features_size: 8
 model.nn.backbone.num_layers: 3
 model.nn.backbone.layer_width: 250
 model.nn.backbone.n_classes: 2
@@ -32,6 +30,6 @@ model.nn.backbone.size_out: 2
 model.nn.backbone.dropout: 0.3
 
 model.optimizer._target_: torch.optim.SGD
-model.optimizer.lr: 0.0001
+model.optimizer.lr: 0.05
 
 # taskset -c "0-4" python run_hydra.py --config=config/fast_odl_german.yaml
