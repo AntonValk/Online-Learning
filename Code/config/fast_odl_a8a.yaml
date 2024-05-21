@@ -1,4 +1,4 @@
-logging.path: "./lightning_logs/new/${dataset.name}"
+logging.path: "./lightning_logs/figure_1/${dataset.name}"
 logging.name: "model=${model._target_}-backbone=${model.nn.backbone._target_}-lr=${model.optimizer.lr}-width=${model.nn.backbone.d_model}-loss=${model.loss._target_}-seed=${random.seed}"
 
 dataset._target_: dataset.a8aDataModule

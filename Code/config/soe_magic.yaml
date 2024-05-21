@@ -15,10 +15,10 @@ trainer.devices: 1
 trainer.accelerator: 'cpu'
 trainer.fast_dev_run: False
 
-model._target_: model.OnlineDeltaU
+model._target_: model.OnlineDelta
 model.loss._target_: torch.nn.CrossEntropyLoss
 
-model.nn.backbone._target_: modules.StackofExperts2
+model.nn.backbone._target_: modules.StackofExperts
 model.nn.backbone.variance: 0.001
 model.nn.backbone.size_in: 10
 model.nn.backbone.num_layers: 3

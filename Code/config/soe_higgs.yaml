@@ -9,8 +9,7 @@ dataset.batch_size: 1
 # dataset.aux_feat_prob: !!python/tuple [0.01,0.05,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,0.95,0.99]
 dataset.aux_feat_prob: !!python/tuple [0.01, 0.05, 0.2, 0.4, 0.6, 0.8, 0.95, 0.99]
 
-random.seed: !!python/tuple [0,1,2]
-# random.seed: !!python/tuple [0,1,2,3,4]
+random.seed: !!python/tuple [0,1,2,3,4]
 
 trainer.max_epochs: 1
 trainer.log_every_n_steps: 1

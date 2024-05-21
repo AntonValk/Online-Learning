@@ -15,7 +15,7 @@ trainer.devices: 1
 trainer.accelerator: 'cpu'
 trainer.fast_dev_run: False
 
-model._target_: model.OnlineMLP
+model._target_: model.OnlineLogisticRegression
 model.loss._target_: torch.nn.CrossEntropyLoss
 
 model.nn.backbone._target_: modules.MLP
@@ -27,6 +27,6 @@ model.nn.backbone.size_out: 2
 model.nn.backbone.dropout: 0.3
 
 model.optimizer._target_: torch.optim.SGD
-model.optimizer.lr: 0.01
+model.optimizer.lr: 0.05
 
 # taskset -c "0-4" python run_hydra.py --config=config/fast_odl_german.yaml
