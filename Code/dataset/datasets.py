@@ -20,6 +20,7 @@ from glob import glob
 import logging
 
 import contextlib
+from sklearn.preprocessing import OneHotEncoder
 
 
 logger = logging.getLogger("dataset")
@@ -676,6 +677,120 @@ class SusyDataModule(pl.LightningDataModule):
 
     def setup(self, stage=None):
         self.dataset = SusyDataset(name=self.name, 
+                                     task_type=self.task_type,
+                                     aux_feat_prob=self.aux_feat_prob,
+                                     use_cuda=self.use_cuda,
+                                     seed=self.seed)
+    
+    def train_dataloader(self):
+        return DataLoader(self.dataset, batch_size=self.batch_size, 
+                          shuffle=False, pin_memory=True, 
+                          persistent_workers=self.persistent_workers,
+                          num_workers=self.num_workers, collate_fn=collate_fn_flat_deal,
+                          multiprocessing_context='fork')
+
+
+class ImnistDataset(Dataset):
+    def __init__(self, 
+                 name: str, 
+                 task_type: str,
+                 aux_feat_prob: float,
+                 use_cuda: bool,
+                 seed: int):
+        super().__init__()
+        self.name = name
+        self.type = task_type
+        self.aux_mask = None
+
+        data_path = os.path.join(os.path.dirname(__file__), 'Datasets', name, 'mnist.csv')
+        n_feat = 784
+        n_aux_feat = 5
+        n_base_feat = n_feat - n_aux_feat
+        number_of_instances = 1000000 # 1M
+        number_of_instances_name = "1M"
+        # Start = "100k"
+        # Gap = "100k"
+        # Stream = "400k"
+
+        temp_seed(seed)
+        
+        # Load Data
+        data = pd.read_csv(data_path, nrows=number_of_instances, header=None)
+        # self.label = np.array(data["0"])
+        
+
+        # # Masking
+        # if self.type == "variable_p":
+        #         mask_file_name = name + "_" + number_of_instances_name +"_P_" + str(int(aux_feat_prob*100)) + "_AuxFeat_" + str(n_aux_feat) + ".data"
+        #         mask_path = os.path.join(os.path.dirname(__file__), 'Datasets', name, 'mask', mask_file_name)
+        #         with open(mask_path, 'rb') as file:
+        #                 self.aux_mask = pickle.load(file)
+        # elif self.type == "obsolete_sudden":
+        #         mask_file_name = name + "_" + number_of_instances_name + "_Start" + Start + "_Gap" + Gap + "_Stream" + Stream + "_AuxFeat_" + str(n_aux_feat) + ".data"
+        #         mask_path = os.path.join(os.path.dirname(__file__), 'Datasets', name, 'mask', mask_file_name)
+        #         with open(mask_path, 'rb') as file:
+        #                 self.aux_mask = pickle.load(file)
+        # else:
+        #         print("Please choose the type as \"variable_p\" or \"obsolete_sudden\" for ", name, " dataset")
+        #         exit()
+
+        # Data division
+        self.n_base_feat = n_base_feat
+        self.n_aux_feat = n_aux_feat
+        self.n_base_feat = data.shape[1] - 1 - n_aux_feat
+        self.Y = np.array(data.iloc[:,:1])
+        self.X_base = np.array(data.iloc[:,1:n_base_feat+1])
+        self.X_aux = np.array(data.iloc[:,n_base_feat+1:], dtype = float)
+        self.aux_mask = np.ones_like(data.iloc[:,n_base_feat+1:].values)
+        self.X_aux_new = np.where(self.aux_mask, self.X_aux, 0)
+        self.n_classes = 10
+
+        labels = data.iloc[:, 0].values
+        labels = labels.reshape(-1,1)
+        enc = OneHotEncoder()
+        enc.fit(labels)
+        # self.Y = np.array(enc.transform(labels).todense())
+        # self.label = self.Y
+        self.label = np.array(enc.transform(labels).todense())
+        
+    def __getitem__(self, index):
+        item = { 
+            "X_base": self.X_base[index], 
+            "X_aux_new": self.X_aux_new[index], 
+            "aux_mask": self.aux_mask[index], 
+            "Y": self.Y[index], 
+            "label": self.label[index],
+        }
+        return item
+
+    def __len__(self):
+        return len(self.Y)
+
+
+class ImnistDataModule(pl.LightningDataModule):
+    def __init__(self,
+                 name: str = 'imnist',
+                 task_type: str = "variable_p",
+                 aux_feat_prob: float = 1,
+                 num_workers: int = -1,
+                 persistent_workers: bool = True,
+                 use_cuda: bool = False,
+                 batch_size: int = 1,
+                 seed: int = 0
+                ):
+        super().__init__()
+        self.name = name
+        self.task_type = task_type
+        self.aux_feat_prob = aux_feat_prob
+        self.use_cuda = use_cuda
+        self.num_workers = num_workers
+        self.persistent_workers = persistent_workers
+        self.batch_size = batch_size
+        self.n_classes = 10
+        self.seed = seed
+
+    def setup(self, stage=None):
+        self.dataset = ImnistDataset(name=self.name, 
                                      task_type=self.task_type,
                                      aux_feat_prob=self.aux_feat_prob,
                                      use_cuda=self.use_cuda,

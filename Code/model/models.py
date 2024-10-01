@@ -7,7 +7,7 @@ import torch.nn.functional as F
 import torch
 
 from utils.model_factory import instantiate
-from metrics import CumulativeError, NormalizedCumulativeError, SmoothedCumulativeError, MovingWindowAccuracy
+from metrics import CumulativeError, NormalizedCumulativeError, SmoothedCumulativeError #, MovingWindowAccuracy
 from modules import ODLSetSingleStageResidualNet, SetDecoder, MLP
 
 
@@ -136,7 +136,7 @@ class OnlineDeltaMix(pl.LightningModule):
                  prog_bar=True, logger=True, batch_size=batch_size)
 
         loss = self.loss(
-                y_hat.view(batch_size, 2),
+                y_hat.view(batch_size, -1),
                 batch['Y'].view(batch_size).long(),
             )
 
@@ -359,7 +359,7 @@ class OnlineLearner(pl.LightningModule):
         for out in net_output['prediction'][1]:
             criterion = self.loss
             loss = criterion(
-                out.view(batch_size, 2),
+                out.view(batch_size, -1),
                 batch['Y'].view(batch_size).long(),
             )
             losses_per_layer.append(loss)
