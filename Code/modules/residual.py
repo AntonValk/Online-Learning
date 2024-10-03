@@ -511,7 +511,7 @@ class MultiClassKalmanMLPproto2(torch.nn.Module):
         aux_mask = x['aux_mask']
         Y = x['label']
         x = torch.cat([X, aux_feat * aux_mask], axis=1)
-        y_hat_lr = self.online_logistic_regression_step(x, Y)
+        y_hat_lr = self.online_logistic_regression_step(x/255, Y)
         h = x
         for layer in self.fc_layers[:-1]:
             h = self.activation(layer(h))
@@ -550,7 +550,7 @@ class MultiClassKalmanMLPproto2(torch.nn.Module):
                 self.theta[i], self.Hessian[i] = rirls(x, Y[0][i], theta0=self.theta[i], Lambda0=self.Hessian[i], theta=self.theta[i])
                 y_preds.append(y_hat_lr)
             
-            return soft(torch.Tensor(np.array(y_preds)).view(1, -1))
+            return torch.Tensor(np.array(y_preds)).view(1, -1) # soft(torch.Tensor(np.array(y_preds)).view(1, -1)) 
 
 
 

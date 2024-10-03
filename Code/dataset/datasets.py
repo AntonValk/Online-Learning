@@ -739,8 +739,8 @@ class ImnistDataset(Dataset):
         self.n_aux_feat = n_aux_feat
         self.n_base_feat = data.shape[1] - 1 - n_aux_feat
         self.Y = np.array(data.iloc[:,:1])
-        self.X_base = np.array(data.iloc[:,1:n_base_feat+1])
-        self.X_aux = np.array(data.iloc[:,n_base_feat+1:], dtype = float)
+        self.X_base = np.array(data.iloc[:,1:n_base_feat+1]) #/ 255
+        self.X_aux = np.array(data.iloc[:,n_base_feat+1:], dtype = float) #/ 255
         self.aux_mask = np.ones_like(data.iloc[:,n_base_feat+1:].values)
         self.X_aux_new = np.where(self.aux_mask, self.X_aux, 0)
         self.n_classes = 10

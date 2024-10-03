@@ -69,6 +69,8 @@ class OnlineDeltaMix(pl.LightningModule):
         self.automatic_optimization = False
         self.logsoftmax = nn.LogSoftmax(dim=1)
         self.moe = nn.Linear(2*3, 2)
+        self.counter = 0
+        self.period = 50
         
     def init_metrics(self):
         self.train_norm_err = NormalizedCumulativeError()
@@ -101,16 +103,19 @@ class OnlineDeltaMix(pl.LightningModule):
         y_hat_proto = y_hat_proto.reshape(1,-1)
 
         self.train_norm_err_MLP(y_hat_MLP, batch['Y'])
-        self.log("train/normalized_error_MLP", self.train_norm_err_MLP.compute(), on_step=True, on_epoch=False, 
-                 prog_bar=True, logger=True, batch_size=batch_size)
+        if self.counter % self.period == 0:
+            self.log("train/normalized_error_MLP", self.train_norm_err_MLP.compute(), on_step=True, on_epoch=False, 
+                     prog_bar=True, logger=True, batch_size=batch_size)
 
         self.train_norm_err_LR(y_hat_lr, batch['Y'])
-        self.log("train/normalized_error_LR", self.train_norm_err_LR.compute(), on_step=True, on_epoch=False, 
-                     prog_bar=True, logger=True, batch_size=batch_size)
+        if self.counter % self.period == 0:
+            self.log("train/normalized_error_LR", self.train_norm_err_LR.compute(), on_step=True, on_epoch=False, 
+                         prog_bar=True, logger=True, batch_size=batch_size)
 
         self.train_norm_err_Proto(y_hat_proto, batch['Y'])
-        self.log("train/train_norm_err_Proto", self.train_norm_err_Proto.compute(), on_step=True, on_epoch=False, 
-                     prog_bar=True, logger=True, batch_size=batch_size)
+        if self.counter % self.period == 0:
+            self.log("train/train_norm_err_Proto", self.train_norm_err_Proto.compute(), on_step=True, on_epoch=False, 
+                         prog_bar=True, logger=True, batch_size=batch_size)
         
         weights = np.array([1-self.train_norm_err_LR.compute(), 1-self.train_norm_err_MLP.compute(), 1-self.train_norm_err_Proto.compute()])/0.1
         weights = torch.Tensor(weights).view(1, -1)
@@ -128,12 +133,14 @@ class OnlineDeltaMix(pl.LightningModule):
             y_hat = self.moe(torch.cat((torch.softmax(y_hat_lr, dim=1), torch.softmax(y_hat_MLP, dim=1), torch.softmax(y_hat_proto, dim=1)), axis=1))
         
         self.train_err(y_hat, batch['Y'])
-        self.log("train/cumulative_error", self.train_err.compute(), on_step=True, on_epoch=False, 
-                 prog_bar=True, logger=True, batch_size=batch_size)
+        if self.counter % self.period == 0:
+            self.log("train/cumulative_error", self.train_err.compute(), on_step=True, on_epoch=False, 
+                     prog_bar=True, logger=True, batch_size=batch_size)
         
         self.train_norm_err(y_hat, batch['Y'])
-        self.log("train/normalized_error", self.train_norm_err.compute(), on_step=True, on_epoch=False, 
-                 prog_bar=True, logger=True, batch_size=batch_size)
+        if self.counter % self.period == 0:
+            self.log("train/normalized_error", self.train_norm_err.compute(), on_step=True, on_epoch=False, 
+                     prog_bar=True, logger=True, batch_size=batch_size)
 
         loss = self.loss(
                 y_hat.view(batch_size, -1),
@@ -142,6 +149,7 @@ class OnlineDeltaMix(pl.LightningModule):
 
         self.manual_backward(loss)
         opt.step()
+        self.counter += 1
         return loss
 
     def configure_optimizers(self):

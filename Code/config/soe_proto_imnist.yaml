@@ -29,10 +29,10 @@ model.nn.backbone.variance: 0.001
 model.nn.backbone._target_: modules.MultiClassKalmanMLPproto2
 model.nn.backbone.size_in: 1
 model.nn.backbone.size_in_MLP: 784
-model.nn.backbone.num_layers: 3
+model.nn.backbone.num_layers: 2
 model.nn.backbone.layer_width: 250
 model.nn.backbone.layer_width_stage: 250
-model.nn.backbone.num_blocks_stage: 6
+model.nn.backbone.num_blocks_stage: 2
 model.nn.backbone.norm_inputs: False
 
 model.nn.backbone.n_classes: 10
