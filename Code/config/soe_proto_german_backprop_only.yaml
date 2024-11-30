@@ -1,4 +1,4 @@
-logging.path: "./lightning_logs/ablation_merge/${dataset.name}/${model.nn.backbone.merge}"
+logging.path: "./lightning_logs/ablation_no_backprop/${dataset.name}/${model.nn.backbone.merge}"
 logging.name: "model=${model._target_}-backbone=${model.nn.backbone._target_}-lr=${model.optimizer.lr}-width=${model.nn.backbone.layer_width}-layers=${model.nn.backbone.num_layers}-protoBlocks=${model.nn.backbone.num_blocks_stage}-protoWidth=${model.nn.backbone.layer_width_stage}-norm=${model.nn.backbone.norm_inputs}-seed=${random.seed}"
 
 dataset._target_: dataset.GermanDataModule
@@ -21,12 +21,12 @@ trainer.devices: 1
 trainer.accelerator: 'cpu'
 trainer.fast_dev_run: False
 
-model._target_: model.OnlineDeltaMix
+model._target_: model.OnlineDeltaBackpropOnly
 model.loss._target_: torch.nn.CrossEntropyLoss
 model.nn.backbone.merge: "sum" #!!python/tuple ["sum", "mul", "soft", "ens", "moe"]
 
 model.nn.backbone.variance: 0.1
-model.nn.backbone._target_: modules.KalmanMLPproto2
+model.nn.backbone._target_: modules.BackPropOnly
 model.nn.backbone.size_in: 1
 model.nn.backbone.size_in_MLP: 24
 model.nn.backbone.num_layers: 3

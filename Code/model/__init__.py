@@ -1,4 +1,4 @@
-from .models import OnlineLearner, AlphaExperiment, VariableAlphaExperiment, OnlineMLP, OnlineMoE, OnlineLogisticRegression, OnlineDelta, OnlineDeltaU, OnlineDeltaMix
+from .models import OnlineLearner, AlphaExperiment, VariableAlphaExperiment, OnlineMLP, OnlineMoE, OnlineLogisticRegression, OnlineDelta, OnlineDeltaU, OnlineDeltaMix, OnlineDeltaBackpropOnly
 
 __all__ = [
     'OnlineLearner',
@@ -10,4 +10,5 @@ __all__ = [
     'OnlineDelta',
     'OnlineDeltaU',
     'OnlineDeltaMix',
+    'OnlineDeltaBackpropOnly',
 ]

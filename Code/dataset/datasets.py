@@ -6,6 +6,8 @@ import pathlib
 import pandas as pd
 import numpy as np
 import pytorch_lightning as pl
+from torch.utils.data import DataLoader
+import torchvision
 
 import torch.nn as nn
 import torch.nn.functional as F
@@ -21,6 +23,7 @@ import logging
 
 import contextlib
 from sklearn.preprocessing import OneHotEncoder
+from torchvision.datasets import CIFAR10
 
 
 logger = logging.getLogger("dataset")
@@ -791,6 +794,126 @@ class ImnistDataModule(pl.LightningDataModule):
 
     def setup(self, stage=None):
         self.dataset = ImnistDataset(name=self.name, 
+                                     task_type=self.task_type,
+                                     aux_feat_prob=self.aux_feat_prob,
+                                     use_cuda=self.use_cuda,
+                                     seed=self.seed)
+    
+    def train_dataloader(self):
+        return DataLoader(self.dataset, batch_size=self.batch_size, 
+                          shuffle=False, pin_memory=True, 
+                          persistent_workers=self.persistent_workers,
+                          num_workers=self.num_workers, collate_fn=collate_fn_flat_deal,
+                          multiprocessing_context='fork')
+
+
+class Cifar10Dataset(Dataset):
+    def __init__(self, 
+                 name: str, 
+                 task_type: str,
+                 aux_feat_prob: float,
+                 use_cuda: bool,
+                 seed: int):
+        super().__init__()
+        cifar10_normalization = torchvision.transforms.Normalize(
+            mean=[x / 255.0 for x in [125.3, 123.0, 113.9]],
+            std=[x / 255.0 for x in [63.0, 62.1, 66.7]],
+        )
+        train_transforms = torchvision.transforms.Compose(
+            [
+                torchvision.transforms.ToTensor(),
+                cifar10_normalization,
+            ]
+        )
+        self.name = name
+        self.type = task_type
+        self.aux_mask = None
+        self.PATH_DATASETS = '.'
+
+        # data_path = os.path.join(os.path.dirname(__file__), 'Datasets', name, 'mnist.csv')
+        dataset = CIFAR10(self.PATH_DATASETS, train=True, download=True, transform=train_transforms)
+        dataloader = DataLoader(dataset, batch_size=50000, shuffle=False, num_workers=1)
+        dataloader_iterator = iter(dataloader)
+        for i in range(1):
+            try:
+                x, y = next(dataloader_iterator)
+            except StopIteration:
+                dataloader_iterator = iter(dataloader)
+                data, target = next(dataloader_iterator)
+        x  = x.reshape(50000, -1)
+        
+        n_feat = 3072
+        n_aux_feat = 5
+        n_base_feat = n_feat - n_aux_feat
+        number_of_instances = 50000 # 1M
+        # Start = "100k"
+        # Gap = "100k"
+        # Stream = "400k"
+
+        temp_seed(seed)
+        
+        # Load Data
+        # data = pd.read_csv(data_path, nrows=number_of_instances, header=None)
+        # self.label = np.array(data["0"])
+
+        # Data division
+        self.n_base_feat = n_base_feat
+        self.n_aux_feat = n_aux_feat
+        self.n_base_feat = x.shape[1] - 1 - n_aux_feat
+        self.Y = y
+        self.X_base = np.array(x[:,:n_base_feat+1]) #/ 255
+        self.X_aux = np.array(x[:,n_base_feat+1:]) #/ 255
+        self.aux_mask = np.ones_like(x[:,n_base_feat+1:])
+        self.X_aux_new = np.where(self.aux_mask, self.X_aux, 0)
+        self.n_classes = 10
+
+        labels = y
+        labels = labels.reshape(-1,1)
+        enc = OneHotEncoder()
+        enc.fit(labels)
+        # self.Y = np.array(enc.transform(labels).todense())
+        # self.label = self.Y
+        self.label = np.array(enc.transform(labels).todense())
+        # self.Y = self.label
+        
+    def __getitem__(self, index):
+        item = { 
+            "X_base": self.X_base[index], 
+            "X_aux_new": self.X_aux_new[index], 
+            "aux_mask": self.aux_mask[index], 
+            "Y": self.Y[index], 
+            "label": self.label[index],
+        }
+        return item
+
+    def __len__(self):
+        return len(self.Y)
+
+
+class Cifar10DataModule(pl.LightningDataModule):
+    def __init__(self,
+                 name: str = 'cifar10',
+                 task_type: str = "variable_p",
+                 aux_feat_prob: float = 1,
+                 num_workers: int = -1,
+                 persistent_workers: bool = True,
+                 use_cuda: bool = False,
+                 batch_size: int = 1,
+                 seed: int = 0
+                ):
+        super().__init__()
+        self.name = name
+        self.task_type = task_type
+        self.aux_feat_prob = aux_feat_prob
+        self.use_cuda = use_cuda
+        self.num_workers = num_workers
+        self.persistent_workers = persistent_workers
+        self.batch_size = batch_size
+        self.n_classes = 10
+        self.seed = seed
+
+    def setup(self, stage=None):
+        self.dataset = Cifar10Dataset(name=self.name, 
                                      task_type=self.task_type,
                                      aux_feat_prob=self.aux_feat_prob,
                                      use_cuda=self.use_cuda,
