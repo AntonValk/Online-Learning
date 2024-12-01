@@ -1,0 +1,46 @@
+logging.path: "./lightning_logs/ablation_many/${dataset.name}/${model.nn.backbone.merge}"
+logging.name: "model=${model._target_}-backbone=${model.nn.backbone._target_}-lr=${model.optimizer.lr}-width=${model.nn.backbone.layer_width}-layers=${model.nn.backbone.num_layers}-protoBlocks=${model.nn.backbone.num_blocks_stage}-protoWidth=${model.nn.backbone.layer_width_stage}-norm=${model.nn.backbone.norm_inputs}-seed=${random.seed}"
+
+dataset._target_: dataset.ImnistDataModule
+dataset.name: "imnist"
+dataset.num_workers: 1
+dataset.persistent_workers: True
+dataset.batch_size: 1
+
+random.seed: !!python/tuple [0,1,2,3,4]
+
+trainer.max_epochs: 1
+trainer.log_every_n_steps: 1
+trainer.devices: 1
+trainer.accelerator: 'cpu'
+trainer.fast_dev_run: False
+
+trainer.max_epochs: 1
+trainer.log_every_n_steps: 1
+trainer.devices: 1
+trainer.accelerator: 'cpu'
+trainer.fast_dev_run: False
+
+model._target_: model.OnlineDeltaMixMany
+model.loss._target_: torch.nn.CrossEntropyLoss
+model.nn.backbone.merge: "sum" #!!python/tuple ["sum", "mul", "soft", "ens", "moe"]
+
+model.nn.backbone.variance: 0.001
+model.nn.backbone._target_: modules.MultiClassKalmanMLPproto2_Multi
+model.nn.backbone.size_in: 1
+model.nn.backbone.size_in_MLP: 784
+model.nn.backbone.num_layers: 2
+model.nn.backbone.layer_width: 250
+model.nn.backbone.layer_width_stage: 250
+model.nn.backbone.num_blocks_stage: 2
+model.nn.backbone.norm_inputs: False
+
+model.nn.backbone.n_classes: 10
+model.nn.backbone.size_out: 10
+model.nn.backbone.dropout: 0.3
+
+model.optimizer._target_: torch.optim.SGD
+# model.optimizer.lr: !!python/tuple [0.005, 0.01]
+model.optimizer.lr: 0.00005
+
+# taskset -c "10-14" python run_hydra.py --config=config/soe_proto_imnist.yaml
